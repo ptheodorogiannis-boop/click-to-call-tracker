@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ruler CallTrack — UI preview</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* tiny ribbon so it's clear this is the static showcase (sample data, no backend) */
+    #previewRibbon{position:fixed;top:10px;right:12px;z-index:200;background:#19C6C1;color:#06302e;
+      font:700 11px system-ui,sans-serif;padding:4px 10px;border-radius:999px;letter-spacing:.03em;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+  </style>
+</head>
+<body>
+  <div id="previewRibbon">STATIC PREVIEW · sample data</div>
+
+  <!-- LOGIN (skipped automatically by the baked-in mock auth) -->
+  <div id="login" class="hidden">
+    <form class="login-card" id="loginForm">
+      <h1 id="brandTitle">Ruler CallTrack</h1><p>Call tracking &amp; attribution</p>
+      <div class="field"><label>User</label><input id="loginUser" value="admin" /></div>
+      <div class="field"><label>Password</label><input id="loginPass" type="password" /></div>
+      <button class="btn" style="width:100%" type="submit">Sign in</button>
+      <div class="err" id="loginErr"></div>
+    </form>
+  </div>
+
+  <!-- APP -->
+  <div id="app" class="hidden">
+    <aside class="sidebar">
+      <div class="logo"><span class="dot"></span><span id="logoMain">Ruler</span><span class="sub" id="logoSub">CallTrack</span></div>
+      <nav class="nav" id="nav">
+        <a data-view="overview" class="active">▦ Overview</a>
+        <a data-view="clients">◴ Clients</a>
+        <a data-view="reports">▤ Reports</a>
+      </nav>
+      <div class="spacer"></div>
+      <div class="who" id="whoami"></div>
+      <button class="btn ghost" id="logoutBtn">Sign out</button>
+    </aside>
+    <main class="main">
+      <section id="view-overview" class="view">
+        <div class="topbar"><h2>Overview</h2><div class="controls"><button class="btn" id="newClientBtn">+ New client</button></div></div>
+        <div class="grid" id="overviewGrid"></div>
+      </section>
+      <section id="view-clients" class="view hidden">
+        <div class="topbar"><h2>Clients</h2><div class="controls"><button class="btn" id="newClientBtn2">+ New client</button></div></div>
+        <table id="clientsTable"><thead><tr><th>Client</th><th>Forward to</th><th>Numbers</th><th>Recording</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>
+      </section>
+      <section id="view-reports" class="view hidden">
+        <div class="topbar"><h2>Reports</h2><div class="controls">
+          <select id="repClient"></select><input type="date" id="repSince" /><button class="btn secondary" id="repRefresh">Refresh</button>
+        </div></div>
+        <div class="scorecards" id="scorecards"></div>
+        <div class="card pad" style="margin-bottom:22px"><h4 style="margin:0 0 14px;color:var(--muted);text-transform:uppercase;font-size:12px;letter-spacing:.04em">Calls by channel</h4><div class="bars" id="channelBars"></div></div>
+        <table id="callsTable"><thead><tr><th>Time</th><th>Caller</th><th>Channel</th><th>Campaign</th><th>Status</th><th>Dur</th><th>Caller type</th><th>Recording</th><th>Conversions</th></tr></thead><tbody></tbody></table>
+      </section>
+    </main>
+  </div>
+  <div id="drawer"></div>
+  <div class="toast" id="toast"></div>
+
+  <!-- Baked-in sample backend (no server / no login needed). Replaces fetch BEFORE app.js runs.
+       Wrapped in an IIFE so its variables don't collide with app.js's globals. -->
+  <script>
+  (function(){
+    const CLIENTS=[
+      {id:'odontiatreio-athens',name:'Οδοντιατρείο Athens',forward_number:'+302101234567',active:1,recording_enabled:1,numbers:6,last30:{total:41,answered:33,qualified:21}},
+      {id:'plumber-pro',name:'Plumber Pro',forward_number:'+302109998877',active:1,recording_enabled:1,numbers:4,last30:{total:27,answered:19,qualified:12}},
+      {id:'beta-clinic',name:'Beta Clinic',forward_number:'+302310000000',active:0,recording_enabled:0,numbers:2,last30:{total:8,answered:5,qualified:2}}
+    ];
+    const STATS={totals:{total:41,answered:33,missed:8,qualified:21,first_time:29},by_channel:[
+      {channel:'google_ads',total:24,answered:20,missed:4,qualified:15,first_time:18},
+      {channel:'meta_ads',total:9,answered:7,missed:2,qualified:4,first_time:7},
+      {channel:'google_organic',total:5,answered:4,missed:1,qualified:1,first_time:3},
+      {channel:'direct',total:3,answered:2,missed:1,qualified:1,first_time:1}]};
+    const CALLS={calls:[
+      {call_sid:'CA1',caller:'+306971234567',started_at:'2026-06-25 11:02:00',channel:'google_ads',utm_campaign:'implants_athens',status:'answered',answered:1,qualified:1,duration_sec:213,first_time:1,recording_url:'#',transcript:'Καλημέρα, θα ήθελα ραντεβού για εμφύτευμα...',conv_google:'ok',conv_meta:'ok',conv_ga4:'ok'},
+      {call_sid:'CA2',caller:'+306945550012',started_at:'2026-06-25 09:40:00',channel:'meta_ads',utm_campaign:'whitening_jun',status:'answered',answered:1,qualified:1,duration_sec:97,first_time:0,recording_url:'#',transcript:null,conv_google:'skipped',conv_meta:'ok',conv_ga4:'ok'},
+      {call_sid:'CA3',caller:'+302108887766',started_at:'2026-06-24 18:12:00',channel:'google_ads',utm_campaign:'implants_athens',status:'missed',answered:0,qualified:0,duration_sec:0,first_time:1,recording_url:null,transcript:null,conv_google:null,conv_meta:null,conv_ga4:null},
+      {call_sid:'CA4',caller:'+306971112233',started_at:'2026-06-24 14:05:00',channel:'direct',utm_campaign:null,status:'answered',answered:1,qualified:0,duration_sec:18,first_time:1,recording_url:'#',transcript:null,conv_google:'skipped',conv_meta:'skipped',conv_ga4:'skipped'}
+    ]};
+    const mkClient=(id)=>({client:{id,name:(CLIENTS.find(c=>c.id===id)||{}).name||id,forward_number:'+302101234567',active:1,recording_enabled:1,qualified_duration_sec:30,lead_value:40,currency:'EUR',consent_message:null,twilio_account_sid:'ACxxxxxxxx',twilio_auth_token_masked:'••••cdef',config:{googleAds:{customerId:'948-754-2725',conversionActionId:'987654321'},meta:{pixelId:'1122334455',capiToken_masked:'••••aaaa',testEventCode:''},ga4:{measurementId:'G-RULER01',apiSecret_masked:'••••bbbb'}}},numbers:[{phone:'+302111982374',label:'pool-1'},{phone:'+302111982375',label:'pool-2'},{phone:'+302111982376',label:'pool-3'}]});
+
+    window.fetch=function(url,opts){ let d={ok:true}; const u=String(url);
+      if(u.indexOf('/me')>-1)d={user:'admin (preview)',brand:{name:'Ruler CallTrack',company:'Ruler Agency'},publicBaseUrl:'https://calls.ruler.agency'};
+      else if(/\/clients\/[^/?]+($|\?)/.test(u))d=mkClient(u.split('?')[0].split('/clients/')[1]);
+      else if(u.indexOf('/clients')>-1)d={clients:CLIENTS};
+      else if(u.indexOf('/report/stats')>-1)d=STATS;
+      else if(u.indexOf('/report/calls')>-1)d=CALLS;
+      return Promise.resolve({status:200,ok:true,json:()=>Promise.resolve(d)});
+    };
+  })();
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>

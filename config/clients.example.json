@@ -1,0 +1,30 @@
+{
+  "_comment": "One block per client. Paste the relevant block into the site as window.CTC_CONFIG (or generate per-client). Secrets like the Meta CAPI token NEVER go here — they live in apps-script/Code.gs (server-side).",
+
+  "client-acme": {
+    "siteId": "client-acme",
+    "collectorUrl": "https://script.google.com/macros/s/AKfycb.../exec",
+    "selectors": ["a[href^=\"tel:\"]", "[data-ctc-call]", ".call-now"],
+    "chatSelectors": ["a[href*=\"wa.me\"]", "a[href*=\"api.whatsapp.com\"]", "a[href^=\"viber:\"]"],
+    "attributionWindowDays": 90,
+
+    "pushToDataLayer": true,
+    "fireDirect": false,
+
+    "_directModeOnly": "Fields below are used ONLY if you set fireDirect:true (i.e. you are NOT using GTM). With GTM, leave fireDirect:false and configure tags in GTM instead.",
+    "ga4MeasurementId": "G-XXXXXXX",
+    "googleAds": { "conversionId": "AW-XXXXXXXXX", "conversionLabel": "abcDEF123" },
+    "metaPixelId": "1234567890",
+
+    "debug": false
+  },
+
+  "client-beta": {
+    "siteId": "client-beta",
+    "collectorUrl": "https://script.google.com/macros/s/AKfycb.../exec",
+    "selectors": ["a[href^=\"tel:\"]"],
+    "pushToDataLayer": true,
+    "fireDirect": false,
+    "debug": false
+  }
+}

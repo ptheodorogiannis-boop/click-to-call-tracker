@@ -1,0 +1,9 @@
+# Replace calls.ruler.agency with YOUR subdomain (and the email with yours).
+# Caddy fetches + renews a free Let's Encrypt certificate automatically.
+{
+	email you@ruler.agency
+}
+
+calls.ruler.agency {
+	reverse_proxy app:8080
+}

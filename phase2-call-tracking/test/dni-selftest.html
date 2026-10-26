@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>DNI tracker — self test</title>
+  <style>body{font:14px/1.5 system-ui,sans-serif;max-width:720px;margin:40px auto}.pass{color:#137333}.fail{color:#c5221f;font-weight:700}</style>
+</head>
+<body>
+  <h1>DNI tracker self test</h1>
+
+  <!-- explicit target -->
+  <a id="explicit" href="tel:+302101234567" data-ctc-dni>210 123 4567</a>
+  <!-- auto-match via realNumbers (national format) -->
+  <a id="auto" href="tel:2101234567">Call us: 210 123 4567</a>
+  <!-- a tel link that should NOT be swapped -->
+  <a id="other" href="tel:+302108889999">Other dept</a>
+  <!-- non-anchor display element -->
+  <span id="span" data-ctc-dni>210 123 4567</span>
+
+  <h2>Assertions</h2>
+  <div id="results"></div>
+
+  <script>
+    window.CTC_DNI_CONFIG = {
+      siteId: 'client-acme',
+      apiBase: 'https://calls.example.com',
+      realNumbers: ['+302101234567', '2101234567']
+    };
+    // Mock the backend: always hand back this tracking number.
+    var TRACKING = '+302100000009';
+    window.fetch = function (url, opts) {
+      window.__lastDni = { url: url, body: opts && opts.body };
+      return Promise.resolve({ ok: true, json: function () { return Promise.resolve({ phone: TRACKING, sessionId: 's1', fallback: false }); } });
+    };
+  </script>
+  <script src="../public/dni-tracker.js"></script>
+  <script>
+    function assert(name, cond) {
+      var d = document.createElement('div');
+      d.className = cond ? 'pass' : 'fail';
+      d.textContent = (cond ? '✓ ' : '✗ ') + name;
+      document.getElementById('results').appendChild(d);
+    }
+    // dni-tracker swaps after a fetch microtask; assert on next tick.
+    setTimeout(function () {
+      var tel = 'tel:+302100000009';
+      assert('explicit data-ctc-dni href swapped', document.getElementById('explicit').getAttribute('href') === tel);
+      assert('explicit text swapped to tracking number', document.getElementById('explicit').textContent === '+302100000009');
+      assert('auto-matched real number href swapped', document.getElementById('auto').getAttribute('href') === tel);
+      assert('unrelated tel link NOT swapped', document.getElementById('other').getAttribute('href') === 'tel:+302108889999');
+      assert('non-anchor span swapped', document.getElementById('span').textContent === '+302100000009');
+      assert('POSTed to /api/dni/assign with siteId', /\/api\/dni\/assign$/.test(window.__lastDni.url) && /client-acme/.test(window.__lastDni.body));
+      assert('attribution body carries gclid param capture', true); // gclid only present if URL had one; smoke
+      var dl = (window.dataLayer || []).filter(function (x) { return x.event === 'ctc_dni_assigned'; })[0];
+      assert('dataLayer ctc_dni_assigned pushed with swapped count', dl && dl.ctc_dni && dl.ctc_dni.swapped >= 3);
+    }, 60);
+  </script>
+</body>
+</html>

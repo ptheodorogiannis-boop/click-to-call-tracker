@@ -1,0 +1,22 @@
+{
+  "name": "ctc-call-tracking",
+  "version": "1.0.0",
+  "description": "Multi-client call tracking (CallRail alternative) — Twilio DNI, recording, attribution, conversion push. Ruler Agency.",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "node tools/migrate.js",
+    "seed": "node tools/seed.js",
+    "simulate": "node test/simulate.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "google-ads-api": "^17.1.0",
+    "twilio": "^5.3.0"
+  }
+}

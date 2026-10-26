@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Demo — Ruler CallTrack in action</title>
+  <style>
+    :root{--ink:#0E1116;--accent:#5B5BF0;--accent2:#19C6C1}
+    *{box-sizing:border-box}
+    body{margin:0;font:16px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#11151C;background:#F5F6F8}
+    /* fake browser chrome to show the visitor's source URL */
+    .browser{background:#e9ebef;border-bottom:1px solid #d7dade;padding:8px 12px;display:flex;align-items:center;gap:8px}
+    .dots{display:flex;gap:6px}.dots i{width:11px;height:11px;border-radius:50%;display:block}
+    .dots i:nth-child(1){background:#ff5f57}.dots i:nth-child(2){background:#febc2e}.dots i:nth-child(3){background:#28c840}
+    .url{flex:1;background:#fff;border:1px solid #d7dade;border-radius:8px;padding:6px 12px;font:13px ui-monospace,Menlo,Consolas,monospace;color:#444;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+    .tag{font-size:11px;background:#E0E7FF;color:#3730A3;padding:2px 8px;border-radius:999px;font-weight:700}
+    /* the "client website" */
+    header.site{background:var(--ink);color:#fff;padding:16px 28px;display:flex;align-items:center;justify-content:space-between}
+    .site .brand{font-weight:800;font-size:20px}
+    .site .brand .a{color:var(--accent2)}
+    .headphone{font-weight:700}
+    .headphone a{color:#fff;text-decoration:none}
+    .hero{max-width:980px;margin:0 auto;padding:54px 24px 30px;text-align:center}
+    .hero h1{font-size:40px;line-height:1.15;margin:0 0 14px}
+    .hero p{font-size:18px;color:#475569;max-width:620px;margin:0 auto 28px}
+    .cta{display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#fff;text-decoration:none;font-weight:800;font-size:22px;padding:16px 30px;border-radius:14px;box-shadow:0 10px 24px rgba(91,91,240,.35)}
+    .cta small{display:block;font-size:12px;font-weight:600;opacity:.85}
+    .trust{display:flex;gap:30px;justify-content:center;margin-top:36px;color:#64748b;font-size:14px;flex-wrap:wrap}
+    .cards{max-width:980px;margin:10px auto 60px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:0 24px}
+    .c{background:#fff;border:1px solid #e6e8ed;border-radius:14px;padding:20px}
+    .c h3{margin:.2em 0}
+    /* live tracking widget (this represents what Ruler CallTrack is doing behind the scenes) */
+    .ctc{position:fixed;right:18px;bottom:18px;width:330px;background:#0E1116;color:#E6EAF2;border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,.35);overflow:hidden;font-size:13px;z-index:50}
+    .ctc .h{display:flex;align-items:center;gap:8px;padding:12px 14px;background:#171B22;font-weight:700}
+    .ctc .h .live{width:9px;height:9px;border-radius:50%;background:var(--accent2);box-shadow:0 0 0 0 rgba(25,198,193,.6);animation:p 1.6s infinite}
+    @keyframes p{0%{box-shadow:0 0 0 0 rgba(25,198,193,.6)}70%{box-shadow:0 0 0 8px rgba(25,198,193,0)}100%{box-shadow:0 0 0 0 rgba(25,198,193,0)}}
+    .ctc .b{padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+    .ctc .row{display:flex;justify-content:space-between;gap:10px}
+    .ctc .k{color:#8A93A6}.ctc .v{font-weight:700;text-align:right}
+    .ctc .num{font:700 15px ui-monospace,Menlo,Consolas,monospace;color:var(--accent2)}
+    .ctc .pill{background:#1F2530;border-radius:8px;padding:8px 10px}
+    .ctc .log{font:11px ui-monospace,Menlo,Consolas,monospace;color:#aeb6c6;max-height:84px;overflow:auto}
+    .ctc .sub{color:#5B5BF0;font-weight:700}
+    .note{max-width:980px;margin:0 auto 80px;padding:0 24px;color:#64748b;font-size:13px}
+  </style>
+</head>
+<body>
+  <div class="browser">
+    <div class="dots"><i></i><i></i><i></i></div>
+    <div class="url" id="url">https://odontiatreio-athens.gr/?gclid=Cj0KCQ&utm_source=google&utm_medium=cpc&utm_campaign=implants_athens</div>
+    <span class="tag">visitor from Google Ads</span>
+  </div>
+
+  <header class="site">
+    <div class="brand">Οδοντιατρείο <span class="a">Athens</span></div>
+    <div class="headphone">☎ <a href="tel:+302101234567" data-ctc-dni>210 123 4567</a></div>
+  </header>
+
+  <section class="hero">
+    <h1>Νέο χαμόγελο, χωρίς αναμονή.</h1>
+    <p>Εμφυτεύματα & αισθητική οδοντιατρική στο κέντρο της Αθήνας. Κλείστε ραντεβού σήμερα.</p>
+    <a class="cta" href="tel:+302101234567" data-ctc-dni id="cta">
+      <span>📞</span>
+      <span>210 123 4567<small>Καλέστε μας τώρα</small></span>
+    </a>
+    <div class="trust"><span>★★★★★ 480+ κριτικές</span><span>✓ Δωρεάν πρώτη εκτίμηση</span><span>✓ Κέντρο Αθήνας</span></div>
+  </section>
+
+  <section class="cards">
+    <div class="c"><h3>Εμφυτεύματα</h3><p>Μόνιμη λύση με εγγύηση.</p></div>
+    <div class="c"><h3>Αισθητική</h3><p>Όψεις & λεύκανση.</p></div>
+    <div class="c"><h3>Παιδοδοντία</h3><p>Φροντίδα για όλη την οικογένεια.</p></div>
+  </section>
+
+  <p class="note">↑ This is a sample client website. The phone number you see was <b>dynamically inserted</b> by Ruler CallTrack — every visitor source gets a unique number, so the actual phone call can be attributed back to the campaign. The panel (bottom-right) shows what happens behind the scenes.</p>
+
+  <!-- LIVE WIDGET (visual narration of the tool — not part of dni-tracker.js itself) -->
+  <div class="ctc" id="ctc">
+    <div class="h"><span class="live"></span> <span><span class="sub">Ruler</span> CallTrack — live</span></div>
+    <div class="b">
+      <div class="row"><span class="k">Visitor source</span><span class="v" id="w-src">…</span></div>
+      <div class="pill">
+        <div class="row"><span class="k">Number shown to visitor</span></div>
+        <div class="num" id="w-num">resolving…</div>
+      </div>
+      <div class="row"><span class="k">gclid captured</span><span class="v" id="w-gclid">…</span></div>
+      <div class="row"><span class="k">Campaign</span><span class="v" id="w-camp">…</span></div>
+      <div class="log" id="w-log"></div>
+    </div>
+  </div>
+
+  <script>
+    // ---- mock the backend so the demo runs without the Node server ----
+    // (In production this POST hits https://calls.ruler.agency/api/dni/assign and the
+    //  number comes from the client's real Twilio pool.)
+    let CAPTURED = null;
+    const realFetch = window.fetch.bind(window);
+    window.fetch = function (url, opts) {
+      if (String(url).indexOf('/api/dni/assign') !== -1) {
+        try { CAPTURED = JSON.parse(opts.body).attribution; } catch (e) {}
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ phone: '+302111982374', sessionId: 'sess-demo', fallback: false }) });
+      }
+      return realFetch(url, opts);
+    };
+
+    // dni-tracker reads location.search; make sure the demo "source" is present
+    // (keep the real pathname so relative <script src> still resolves correctly)
+    if (!location.search) history.replaceState(null, '', location.pathname + '?gclid=Cj0KCQ&utm_source=google&utm_medium=cpc&utm_campaign=implants_athens');
+
+    window.CTC_DNI_CONFIG = {
+      siteId: 'odontiatreio-athens',
+      apiBase: 'https://calls.ruler.agency',
+      realNumbers: ['+302101234567', '2101234567']
+    };
+    const log = (m) => { const l = document.getElementById('w-log'); l.innerHTML += '› ' + m + '<br>'; l.scrollTop = l.scrollHeight; };
+    log('page loaded · detecting source…');
+
+    // narrate dni-tracker's result
+    window.dataLayer = window.dataLayer || [];
+    const _push = window.dataLayer.push.bind(window.dataLayer);
+    window.dataLayer.push = function (o) { if (o && o.event === 'ctc_dni_assigned') onAssigned(o.ctc_dni); return _push(o); };
+
+    function onAssigned(d) {
+      document.getElementById('w-num').textContent = d.phone;
+      const a = CAPTURED || {};
+      document.getElementById('w-src').textContent = a.gclid ? 'Google Ads' : (a.utm_source || 'Direct');
+      document.getElementById('w-gclid').textContent = a.gclid ? (a.gclid.slice(0, 10) + '…') : '—';
+      document.getElementById('w-camp').textContent = a.utm_campaign || '—';
+      log('assigned tracking number ' + d.phone);
+      log('swapped ' + d.swapped + ' number(s) on page');
+      log('attribution stored → call will be attributed');
+    }
+
+    // show that a click would become a tracked call
+    document.addEventListener('click', function (e) {
+      const a = e.target.closest && e.target.closest('a[href^="tel:"]');
+      if (a) { e.preventDefault(); log('📞 CALL to ' + a.getAttribute('href').replace('tel:', '') + ' → tracked server-side'); }
+    }, true);
+  </script>
+  <script src="../public/dni-tracker.js"></script>
+</body>
+</html>

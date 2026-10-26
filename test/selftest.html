@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CTC tracker — self test</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 16px; }
+    .pass { color: #137333; } .fail { color: #c5221f; font-weight: 700; }
+    pre { background: #f5f5f5; padding: 12px; border-radius: 8px; overflow: auto; }
+    a.btn { display: inline-block; margin: 6px 8px 6px 0; padding: 8px 12px; background: #1a73e8; color: #fff; border-radius: 6px; text-decoration: none; }
+    h2 { margin-top: 28px; }
+  </style>
+</head>
+<body>
+  <h1>Click-to-Call tracker — self test</h1>
+  <p>Open this file in a browser. It loads <code>../tracker.js</code> in <em>direct + debug</em> mode,
+     simulates clicks, and asserts the payloads. Open DevTools console for full logs.</p>
+
+  <p>Try the real links too (then check the <b>Captured events</b> section):</p>
+  <a class="btn" href="tel:+302101234567">Call landline +30 210…</a>
+  <a class="btn" href="tel:6971234567">Call mobile 697… (national)</a>
+  <a class="btn" data-ctc-call data-ctc-phone="2310000000">Custom call button</a>
+
+  <h2>Assertions</h2>
+  <div id="results"></div>
+
+  <h2>Captured events</h2>
+  <pre id="events">[]</pre>
+
+  <!-- Pretend we arrived from a Google Ads click so attribution has a signal -->
+  <script>
+    // Simulate query params without a server by faking location.search-derived values:
+    // tracker reads location.search, so we set the URL hash-free search via history if possible.
+    try { history.replaceState(null, '', location.pathname + '?gclid=TEST_GCLID&utm_source=google&utm_medium=cpc&utm_campaign=greek_calls'); } catch (e) {}
+
+    window.CTC_CONFIG = {
+      siteId: 'selftest',
+      pushToDataLayer: true,
+      fireDirect: true,          // exercise the direct path
+      ga4MeasurementId: 'G-TEST',
+      googleAds: { conversionId: 'AW-TEST', conversionLabel: 'lbl' },
+      metaPixelId: '0000',
+      debug: true
+    };
+
+    // Capture outbound side effects instead of really firing them:
+    window.dataLayer = [];
+    window.__events = [];
+    window.gtag = function () { window.__events.push(['gtag'].concat([].slice.call(arguments))); };
+    window.fbq  = function () { window.__events.push(['fbq'].concat([].slice.call(arguments))); };
+    // Prevent the real tel: navigation during the test
+    document.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('a[href^="tel:"]');
+      if (a) e.preventDefault();
+    });
+  </script>
+  <script src="../tracker.js"></script>
+  <script>
+    function assert(name, cond) {
+      var d = document.createElement('div');
+      d.className = cond ? 'pass' : 'fail';
+      d.textContent = (cond ? '✓ ' : '✗ ') + name;
+      document.getElementById('results').appendChild(d);
+    }
+
+    function lastDL() { return window.dataLayer[window.dataLayer.length - 1]; }
+
+    // 1) attribution primed on load
+    var attr = JSON.parse(localStorage.getItem('ctc_attr_selftest') || '{}');
+    assert('attribution captured gclid on load', attr.last && attr.last.gclid === 'TEST_GCLID');
+    assert('attribution captured utm_source=google', attr.last && attr.last.utm_source === 'google');
+
+    // 2) simulate a tel: click programmatically
+    document.querySelector('a[href="tel:+302101234567"]').click();
+    var dl = lastDL();
+    assert('dataLayer received phone_call_click', dl && dl.event === 'phone_call_click');
+    assert('payload normalized landline to E.164', dl && dl.ctc.phone === '+302101234567');
+    assert('payload carries an event_id', !!(dl && dl.ctc.event_id));
+    assert('payload carries last_touch gclid', dl && dl.ctc.last_touch && dl.ctc.last_touch.gclid === 'TEST_GCLID');
+
+    var idA = dl.ctc.event_id;
+
+    // 3) national mobile -> +30
+    document.querySelector('a[href="tel:6971234567"]').click();
+    var dl2 = lastDL();
+    assert('national mobile normalized to +3069…', dl2 && dl2.ctc.phone === '+306971234567');
+    assert('event_id is unique per click', dl2 && dl2.ctc.event_id !== idA);
+
+    // 4) custom button via data-ctc-phone
+    document.querySelector('[data-ctc-call]').click();
+    var dl3 = lastDL();
+    assert('custom button uses data-ctc-phone', dl3 && dl3.ctc.phone === '+302310000000');
+
+    // 5) dedupe: immediate second click on same number is ignored
+    var before = window.dataLayer.length;
+    document.querySelector('a[href="tel:+302101234567"]').click();
+    assert('rapid duplicate click is deduped', window.dataLayer.length === before);
+
+    // 6) direct-mode pixels fired
+    // Google Ads conversions are sent as gtag('event','conversion',{...}) — check arg index 2.
+    var firedGtagConv = window.__events.some(function (e) { return e[0] === 'gtag' && e[2] === 'conversion'; });
+    var firedFbq = window.__events.some(function (e) { return e[0] === 'fbq'; });
+    assert('Google Ads conversion fired (direct mode)', firedGtagConv);
+    assert('Meta fbq fired (direct mode)', firedFbq);
+
+    document.getElementById('events').textContent =
+      JSON.stringify(window.dataLayer.map(function (x) { return x.ctc; }).filter(Boolean), null, 2);
+  </script>
+</body>
+</html>

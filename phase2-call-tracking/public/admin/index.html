@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ruler CallTrack</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- LOGIN -->
+  <div id="login">
+    <form class="login-card" id="loginForm">
+      <h1 id="brandTitle">Ruler CallTrack</h1>
+      <p>Call tracking & attribution</p>
+      <div class="field"><label>User</label><input id="loginUser" autocomplete="username" value="admin" /></div>
+      <div class="field"><label>Password</label><input id="loginPass" type="password" autocomplete="current-password" /></div>
+      <button class="btn" style="width:100%" type="submit">Sign in</button>
+      <div class="err" id="loginErr"></div>
+    </form>
+  </div>
+
+  <!-- APP -->
+  <div id="app" class="hidden">
+    <aside class="sidebar">
+      <div class="logo"><span class="dot"></span><span id="logoMain">Ruler</span><span class="sub" id="logoSub">CallTrack</span></div>
+      <nav class="nav" id="nav">
+        <a data-view="overview" class="active">▦ Overview</a>
+        <a data-view="clients">◴ Clients</a>
+        <a data-view="reports">▤ Reports</a>
+      </nav>
+      <div class="spacer"></div>
+      <div class="who" id="whoami"></div>
+      <button class="btn ghost" id="logoutBtn">Sign out</button>
+    </aside>
+
+    <main class="main">
+      <!-- OVERVIEW -->
+      <section id="view-overview" class="view">
+        <div class="topbar"><h2>Overview</h2>
+          <div class="controls"><button class="btn" id="newClientBtn">+ New client</button></div>
+        </div>
+        <div class="grid" id="overviewGrid"></div>
+      </section>
+
+      <!-- CLIENTS -->
+      <section id="view-clients" class="view hidden">
+        <div class="topbar"><h2>Clients</h2>
+          <div class="controls"><button class="btn" id="newClientBtn2">+ New client</button></div>
+        </div>
+        <table id="clientsTable">
+          <thead><tr><th>Client</th><th>Forward to</th><th>Numbers</th><th>Recording</th><th>Status</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- REPORTS -->
+      <section id="view-reports" class="view hidden">
+        <div class="topbar"><h2>Reports</h2>
+          <div class="controls">
+            <select id="repClient"></select>
+            <input type="date" id="repSince" />
+            <button class="btn secondary" id="repRefresh">Refresh</button>
+          </div>
+        </div>
+        <div class="scorecards" id="scorecards"></div>
+        <div class="card pad" style="margin-bottom:22px">
+          <h4 style="margin:0 0 14px;color:var(--muted);text-transform:uppercase;font-size:12px;letter-spacing:.04em">Calls by channel</h4>
+          <div class="bars" id="channelBars"></div>
+        </div>
+        <table id="callsTable">
+          <thead><tr><th>Time</th><th>Caller</th><th>Channel</th><th>Campaign</th><th>Status</th><th>Dur</th><th>Caller type</th><th>Recording</th><th>Conversions</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <div id="drawer"></div>
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
