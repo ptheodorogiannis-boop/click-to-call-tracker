@@ -25,13 +25,13 @@ export default function Overview() {
 
       {error && !data ? <Tile><ErrorState error={error} retry={reload} /></Tile> : !data ? <OverviewSkeleton /> : (
         <div className={`grid grid-cols-1 gap-3.5 md:grid-cols-6 lg:grid-cols-12 ${loading ? 'opacity-70 transition-opacity' : ''}`} aria-busy={loading}>
+          <CallBackStrip data={data} />
           <Headline data={data} />
           <MapTile data={data} />
           <MissedTile data={data} />
           <FirstTimeTile data={data} />
           {single || data.client ? <LatestCalls clientId={data.client?.id || me.clients[0]?.id} /> : <ClientsTable data={data} />}
           <ChannelTile data={data} />
-          <CallBackStrip data={data} />
         </div>
       )}
     </>
@@ -111,18 +111,18 @@ function ClientsTable({ data }: { data: OverviewData }) {
       {!rows.length ? <Empty title="No clients yet" action={<Link className="btn btn-glass btn-sm" to="/clients?new=1">Add a client</Link>} /> : (
         <div className="overflow-x-auto">
           <table className="table">
-            <thead><tr><th>Client</th><th className="r">Calls</th><th className="r">Answered</th><th className="r">Leads</th><th className="r">Call back</th><th className="hidden w-[120px] xl:table-cell">Trend</th></tr></thead>
+            <thead><tr><th>Client</th><th className="r">Calls</th><th className="r">Answered</th><th className="r">Leads</th><th className="r">To call back</th><th className="hidden w-[120px] 2xl:table-cell">Trend</th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} data-href onClick={() => navigate(`/?client_id=${encodeURIComponent(r.id)}&days=${data.range.days}`)}>
-                  <td className="max-w-[200px] truncate">
+                  <td className="max-w-[180px] truncate">
                     <Link to={`/?client_id=${encodeURIComponent(r.id)}&days=${data.range.days}`} onClick={(e) => e.stopPropagation()}>{r.name}</Link>
                   </td>
                   <td className="r num">{int(r.calls)}</td>
-                  <td className="r num">{r.flags.includes('answer_rate') ? <span className="chip chip-alert">{pct(r.answer_rate)}</span> : pct(r.answer_rate)}</td>
+                  <td className="r num">{r.flags.includes('answer_rate') ? <span className="chip chip-warn">{pct(r.answer_rate)}</span> : pct(r.answer_rate)}</td>
                   <td className="r num">{int(r.leads)}</td>
                   <td className="r num">{r.to_call_back ? <span className="text-down">{r.to_call_back}</span> : <span className="text-ink-3">None</span>}</td>
-                  <td className="hidden xl:table-cell"><Sparkline values={r.trend} height={22} accent={r.flags.includes('calls_down')} label={`${r.name}, calls per day`} /></td>
+                  <td className="hidden 2xl:table-cell"><Sparkline values={r.trend} height={22} accent={r.flags.includes('calls_down')} label={`${r.name}, calls per day`} /></td>
                 </tr>
               ))}
             </tbody>
@@ -142,19 +142,19 @@ function LatestCalls({ clientId }: { clientId?: string }) {
       {error ? <ErrorState error={error} retry={reload} /> : !data ? <Loading rows={5} /> : !data.calls.length ? (
         <Empty title="No calls yet">Calls appear here a few seconds after someone rings a tracking number</Empty>
       ) : (
-        <table className="table">
-          <thead><tr><th>When</th><th>Caller</th><th>Source</th><th className="r">Length</th></tr></thead>
+        <div className="overflow-x-auto"><table className="table">
+          <thead><tr><th>When</th><th>Caller</th><th className="hidden sm:table-cell">Source</th><th className="r">Length</th></tr></thead>
           <tbody>
             {data.calls.map((c) => (
               <tr key={c.call_sid}>
                 <td className="whitespace-nowrap"><Link to={`/calls?call=${encodeURIComponent(c.call_sid)}`}>{when(c.started_at)}</Link></td>
                 <td className="whitespace-nowrap num">{phone(c.caller)}</td>
-                <td className="truncate">{channel(c.channel)}</td>
-                <td className="r num">{c.answered ? `${Math.round(c.duration_sec / 60) || '<1'} min` : <span className="chip chip-alert">Missed</span>}</td>
+                <td className="hidden truncate sm:table-cell">{channel(c.channel)}</td>
+                <td className="r num">{c.answered ? `${Math.round(c.duration_sec / 60) || '<1'} min` : <span className="chip chip-warn">Missed</span>}</td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </Tile>
   );
@@ -171,15 +171,24 @@ function ChannelTile({ data }: { data: OverviewData }) {
 }
 
 function CallBackStrip({ data }: { data: OverviewData }) {
+  const { canEdit } = useSession();
   const { count, from_ads } = data.to_call_back;
   if (!count) return null;
+  if (!canEdit) {
+    return (
+      <Tile className="flex items-center justify-between gap-4 px-6 py-4 md:col-span-6 lg:col-span-12">
+        <span className="text-[14px]">{count} missed {count === 1 ? 'caller is' : 'callers are'} waiting for a call back from the agency</span>
+        <Link to="/calls?status=missed" className="btn btn-glass shrink-0">See missed calls</Link>
+      </Tile>
+    );
+  }
   const text = from_ads
     ? `${from_ads} missed ${from_ads === 1 ? 'call' : 'calls'} from ads ${from_ads === 1 ? 'has' : 'have'} not been called back${count > from_ads ? `, ${count} in all` : ''}`
     : `${count} missed ${count === 1 ? 'call has' : 'calls have'} not been called back`;
   return (
-    <div className="strip rise md:col-span-6 lg:col-span-12" style={{ animationDelay: '280ms' }}>
+    <div className="strip rise md:col-span-6 lg:col-span-12">
       <span className="text-[14px]">{text}</span>
-      <Link to={`/calls${qs({ status: 'to_call_back', client_id: data.client?.id })}`} className="btn btn-accent shrink-0">Call back list <ArrowRight /></Link>
+      <Link to={`/calls${qs({ status: 'to_call_back', client_id: data.client?.id })}`} className="btn btn-accent shrink-0">Open to call back <ArrowRight /></Link>
     </div>
   );
 }

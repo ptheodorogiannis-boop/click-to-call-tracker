@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, NavLink, Route, Routes } from 'react-router-dom';
 import { Copy, Trash2 } from 'lucide-react';
 import { api, type ClientEditor as EditorData, type Token, type User } from '../lib/api';
-import { useLoad, useSession, useTheme, useToast } from '../lib/hooks';
+import { useLoad, useSession, useThemeMode, useToast } from '../lib/hooks';
 import { ago } from '../lib/format';
 import { Empty, ErrorState, Field, Loading, PageHead, Tile, TileHead } from '../components/ui';
 import { Website } from './ClientEditor';
@@ -18,7 +18,7 @@ export default function Settings() {
   return (
     <>
       <PageHead title="Settings" />
-      <nav className="seg mb-5 flex-wrap" aria-label="Settings">
+      <nav className="seg mb-5 flex-wrap md:hidden" aria-label="Settings">
         {tabs.map((t) => <NavLink key={t.to} to={t.to} end={t.end}>{t.label}</NavLink>)}
       </nav>
       <Routes>
@@ -33,7 +33,7 @@ export default function Settings() {
 
 function Account() {
   const { me } = useSession();
-  const [theme, toggle] = useTheme();
+  const [mode, setMode] = useThemeMode();
   return (
     <div className="grid gap-3.5 lg:grid-cols-2">
       <Tile className="p-5">
@@ -49,10 +49,11 @@ function Account() {
       <Tile className="p-5">
         <TileHead title="Look" />
         <div className="seg" role="group" aria-label="Theme">
-          <button aria-pressed={theme === 'light'} onClick={() => theme !== 'light' && toggle()}>Light</button>
-          <button aria-pressed={theme === 'dark'} onClick={() => theme !== 'dark' && toggle()}>Dark</button>
+          {(['system', 'light', 'dark'] as const).map((m) => (
+            <button key={m} aria-pressed={mode === m} onClick={() => setMode(m)}>{{ system: 'Same as system', light: 'Light', dark: 'Dark' }[m]}</button>
+          ))}
         </div>
-        <p className="mt-3 text-[13px] text-ink-2">Remembered on this browser. Until you choose, it follows your system.</p>
+        <p className="mt-3 text-[13px] text-ink-2">Remembered on this browser</p>
       </Tile>
     </div>
   );
@@ -189,6 +190,8 @@ function Team() {
     finally { setBusy(false); }
   };
   const update = async (u: User, body: Partial<User>) => {
+    if (body.role && (body.role === 'owner' || u.role === 'owner')
+      && !window.confirm(body.role === 'owner' ? `Make ${u.name} an owner? Owners manage the team and client logins.` : `Remove owner rights from ${u.name}?`)) { reload(); return; }
     try { await api.patch(`/users/${u.id}`, body); reload(); toast('Saved'); }
     catch (err) { toast((err as Error).message, 'error'); }
   };

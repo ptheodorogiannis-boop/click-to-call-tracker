@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Download, Search } from 'lucide-react';
-import { qs, type CallList } from '../lib/api';
+import { ChevronLeft, ChevronRight, Download, PhoneCall, Search } from 'lucide-react';
+import { qs, type Call, type CallList } from '../lib/api';
 import { useLoad, useSession } from '../lib/hooks';
-import { CHANNELS, LEAD_LABEL, channel, duration, int, phone, when } from '../lib/format';
+import { CHANNELS, LEAD_LABEL, ago, channel, duration, int, phone, when } from '../lib/format';
 import { ClientSelect, useDays, useParam } from '../components/filters';
 import { Empty, ErrorState, Loading, PageHead, Tile } from '../components/ui';
 import CallDrawer from './CallDrawer';
@@ -19,7 +19,7 @@ const PAGE = 50;
 const sinceFor = (days: number) => { const d = new Date(); d.setDate(d.getDate() - (days - 1)); return d.toISOString().slice(0, 10); };
 
 export default function Calls() {
-  const { me } = useSession();
+  const { me, canEdit } = useSession();
   const [sp, setSp] = useSearchParams();
   const [days, setDays] = useDays();
   const [client] = useParam('client_id');
@@ -68,7 +68,7 @@ export default function Calls() {
           </select>
           <select className="select h-9 !w-auto rounded-full" value={lead} onChange={(e) => setLead(e.target.value)} aria-label="Lead status">
             <option value="">Any lead status</option>
-            {Object.entries(LEAD_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            {Object.entries(LEAD_LABEL).map(([k, v]) => <option key={k} value={k}>{k === 'new' ? 'Not judged, any length' : v}</option>)}
           </select>
           <label className="relative ml-auto min-w-[200px] flex-1 sm:max-w-[300px]">
             <span className="sr-only">Search calls</span>
@@ -87,7 +87,22 @@ export default function Calls() {
               : <Empty title="No calls in this period">Calls appear here a few seconds after someone rings a tracking number</Empty>
         ) : (
           <div className={loading ? 'opacity-70 transition-opacity' : ''} aria-busy={loading}>
-            <div className="overflow-x-auto">
+            {/* phones: one stacked row per call, with a call button where someone is waiting */}
+            <ul className="md:hidden">
+              {data.calls.map((c) => (
+                <li key={c.call_sid} className="flex items-center gap-3 border-t border-line py-3 first:border-t-0">
+                  <button className="min-w-0 flex-1 text-left" onClick={() => setParam('call', c.call_sid)} aria-label={`Open the call from ${phone(c.caller)}, ${when(c.started_at)}`}>
+                    <span className="block truncate text-[15px] num">{phone(c.caller)}</span>
+                    <span className="block truncate text-[12px] text-ink-3">{multi ? `${c.client_name}, ` : ''}{when(c.started_at)}, {channel(c.channel)}</span>
+                  </button>
+                  <span className="shrink-0 text-right text-[13px] num"><Outcome c={c} queue={status === 'to_call_back'} /></span>
+                  {canEdit && c.to_call_back && c.caller && (
+                    <a className="btn shrink-0 !h-11 !px-4" href={`tel:${c.caller}`} aria-label={`Call ${phone(c.caller)}`}><PhoneCall /></a>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <div className="hidden overflow-x-auto md:block">
               <table className="table min-w-[860px]">
                 <thead>
                   <tr>
@@ -106,12 +121,8 @@ export default function Calls() {
                       </td>
                       <td className="whitespace-nowrap">{channel(c.channel)}</td>
                       <td className="max-w-[180px] truncate text-ink-2">{c.utm_campaign || 'None'}</td>
-                      <td className="whitespace-nowrap num">
-                        {c.answered ? duration(c.duration_sec)
-                          : c.to_call_back ? <span className="chip chip-alert">Call back</span>
-                            : <span className="text-ink-2">{c.called_back_at ? 'Called back' : c.status === 'ringing' ? 'Ringing' : 'Missed'}</span>}
-                      </td>
-                      <td className="whitespace-nowrap">{c.lead_status === 'new' ? (c.is_lead ? <span className="text-ink-2">Qualified</span> : <span className="text-ink-3">Not judged</span>) : <span className={c.lead_status === 'good' || c.lead_status === 'customer' ? 'chip chip-good' : 'chip'}>{LEAD_LABEL[c.lead_status]}</span>}</td>
+                      <td className="whitespace-nowrap num"><Outcome c={c} queue={status === 'to_call_back'} /></td>
+                      <td className="whitespace-nowrap">{c.lead_status === 'new' ? (c.is_lead ? <span className="text-ink-2">Lead by length</span> : <span className="text-ink-3">Not judged</span>) : <span className={c.lead_status === 'good' || c.lead_status === 'customer' ? 'chip chip-good' : 'chip'}>{LEAD_LABEL[c.lead_status]}</span>}</td>
                       <td className="max-w-[160px] truncate text-ink-2">{c.tags.join(', ')}</td>
                     </tr>
                   ))}
@@ -132,4 +143,11 @@ export default function Calls() {
       <CallDrawer sid={open} onClose={() => setParam('call', null)} onChanged={reload} />
     </>
   );
+}
+
+// What happened on the call. In the to-call-back view every row is waiting, so it says for how long instead.
+function Outcome({ c, queue }: { c: Call; queue: boolean }) {
+  if (c.answered) return <>{duration(c.duration_sec)}</>;
+  if (c.to_call_back) return queue ? <span className="text-ink-2">Waiting {ago(c.started_at).replace(' ago', '')}</span> : <span className="chip chip-warn">To call back</span>;
+  return <span className="text-ink-2">{c.called_back_at ? 'Called back' : c.status === 'ringing' ? 'Ringing' : 'Missed'}</span>;
 }

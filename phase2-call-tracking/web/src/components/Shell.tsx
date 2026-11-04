@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Building2, Code2, LayoutGrid, LogOut, Moon, Phone, PlugZap, Search, Settings, Sun, Users, BarChart3 } from 'lucide-react';
 import { api, qs, type Call } from '../lib/api';
 import { useHotkey, useLoad, useSession, useTheme } from '../lib/hooks';
 import { channel, phone, when } from '../lib/format';
+import { useModal } from './ui';
 
 export function Shell({ children }: { children: ReactNode }) {
   const { me, canEdit, isOwner } = useSession();
@@ -11,9 +13,9 @@ export function Shell({ children }: { children: ReactNode }) {
   const [searching, setSearching] = useState(false);
   const openSearch = useCallback(() => setSearching(true), []);
   useHotkey('k', openSearch);
-  // The open call-back queue, shown as a count on Calls. Refreshed on every page change.
+  // The open call-back queue, shown as a count on Calls to the people who work it. Refreshed on every page change.
   const loc = useLocation();
-  const { data: queue } = useLoad<{ total: number }>(`/calls${qs({ status: 'to_call_back', limit: 1 })}&_=${loc.pathname}`);
+  const { data: queue } = useLoad<{ total: number }>(canEdit ? `/calls${qs({ status: 'to_call_back', limit: 1 })}&_=${loc.pathname}` : null);
 
   const nav = [
     { to: '/', label: 'Overview', end: true },
@@ -45,7 +47,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <kbd className="rounded-full bg-paper px-2 py-0.5 text-[11px] text-ink-2">{navigator.platform.includes('Mac') ? '⌘K' : 'Ctrl K'}</kbd>
           </button>
           <button className="icon-btn lg:hidden" onClick={openSearch} aria-label="Search"><Search /></button>
-          <button className="icon-btn" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+          <button className="icon-btn hidden md:grid" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
             {theme === 'dark' ? <Sun /> : <Moon />}
           </button>
           <AccountMenu />
@@ -57,7 +59,6 @@ export function Shell({ children }: { children: ReactNode }) {
               <Search />
             </button>
             <div className="h-6" />
-            {canEdit && <RailLink to="/clients" label="Clients" icon={<Building2 />} />}
             <RailLink to="/settings/api" label="API and MCP" icon={<PlugZap />} />
             {canEdit && <RailLink to="/settings/install" label="Website code" icon={<Code2 />} />}
             {isOwner && <RailLink to="/settings/team" label="Team and client logins" icon={<Users />} />}
@@ -67,7 +68,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      <nav className="tile fixed inset-x-3 bottom-3 z-30 flex justify-between gap-1 rounded-full p-1.5 md:hidden" aria-label="Main">
+      <nav className="tabbar fixed inset-x-3 bottom-3 z-30 flex justify-between gap-1 rounded-full p-1.5 md:hidden" aria-label="Main">
         <TabLink to="/" end icon={<LayoutGrid />} label="Home" />
         <TabLink to="/calls" icon={<Phone />} label="Calls" count={queue?.total || 0} />
         {canEdit && <TabLink to="/clients" icon={<Building2 />} label="Clients" />}
@@ -87,8 +88,13 @@ function Wordmark() {
 
 function RailLink({ to, label, icon, end }: { to: string; label: string; icon: ReactNode; end?: boolean }) {
   return (
-    <NavLink to={to} end={end} title={label} aria-label={label} className="rounded-full">
-      {({ isActive }) => <span className="icon-btn" aria-current={isActive ? 'page' : undefined}>{icon}</span>}
+    <NavLink to={to} end={end} aria-label={label} className="rail-link relative rounded-full">
+      {({ isActive }) => (
+        <>
+          <span className="icon-btn" aria-current={isActive ? 'page' : undefined}>{icon}</span>
+          <span className="rail-tip" aria-hidden="true">{label}</span>
+        </>
+      )}
     </NavLink>
   );
 }
@@ -121,11 +127,11 @@ function AccountMenu() {
   const signOut = async () => { await api.post('/auth/logout').catch(() => {}); window.location.href = '/'; };
   return (
     <div className="relative" ref={ref}>
-      <button className="grid h-10 w-10 place-items-center rounded-full bg-ink text-[12px] font-semibold text-ground" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} aria-label="Account">
+      <button className="grid h-10 w-10 place-items-center rounded-full bg-ink text-[12px] font-semibold text-ground" aria-expanded={open} aria-controls="account-panel" onClick={() => setOpen((o) => !o)} aria-label="Account">
         {initials}
       </button>
       {open && (
-        <div role="menu" className="overlay absolute right-0 top-12 z-40 w-64 rounded-pop p-2" style={{ animation: 'rise var(--dur-micro) var(--ease-brand) both' }}>
+        <div id="account-panel" className="overlay absolute right-0 top-12 z-40 w-64 rounded-pop p-2" style={{ animation: 'rise var(--dur-micro) var(--ease-brand) both' }}>
           <div className="px-3 py-2">
             <p className="truncate text-[14px] font-medium">{me.user.name}</p>
             <p className="truncate text-[12px] text-ink-3">{me.user.login}</p>
@@ -144,7 +150,7 @@ const ROLE = { owner: 'Owner', member: 'Team member', client: 'Client' } as cons
 
 function MenuItem({ children, icon, onClick }: { children: ReactNode; icon: ReactNode; onClick: () => void }) {
   return (
-    <button role="menuitem" onClick={onClick} className="flex w-full items-center gap-3 rounded-[10px] px-3 py-2 text-left text-[14px] text-ink hover:bg-paper [&_svg]:h-4 [&_svg]:w-4 [&_svg]:stroke-[1.5] [&_svg]:text-ink-3">
+    <button onClick={onClick} className="flex w-full items-center gap-3 rounded-[10px] px-3 py-2 text-left text-[14px] text-ink hover:bg-paper [&_svg]:h-4 [&_svg]:w-4 [&_svg]:stroke-[1.5] [&_svg]:text-ink-3">
       {icon}{children}
     </button>
   );
@@ -156,6 +162,9 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
   const [debounced, setDebounced] = useState('');
   const [sel, setSel] = useState(0);
   const navigate = useNavigate();
+  const panel = useRef<HTMLDivElement>(null);
+  const uid = useId();
+  useModal(true, panel, onClose);
   useEffect(() => { const t = setTimeout(() => setDebounced(q.trim()), 160); return () => clearTimeout(t); }, [q]);
   const { data, loading } = useLoad<{ clients: { id: string; name: string }[]; calls: Call[] }>(debounced.length >= 2 ? `/search${qs({ q: debounced })}` : null);
   const items = [
@@ -164,38 +173,36 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
   ];
   useEffect(() => setSel(0), [debounced]);
   const go = (i: number) => { const it = items[i]; if (it) { onClose(); navigate(it.go); } };
-  useEffect(() => {
-    const on = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', on);
-    return () => window.removeEventListener('keydown', on);
-  }, [onClose]);
-  return (
+  const optionId = (i: number) => `${uid}-opt-${i}`;
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-scrim px-4 pt-[12vh]" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div role="dialog" aria-modal="true" aria-label="Search" className="overlay w-full max-w-[560px] overflow-hidden rounded-tile" style={{ animation: 'rise var(--dur-short) var(--ease-brand) both' }}>
+      <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Search" className="overlay w-full max-w-[560px] overflow-hidden rounded-tile" style={{ animation: 'rise var(--dur-short) var(--ease-brand) both' }}>
         <div className="flex items-center gap-3 border-b border-line px-5">
-          <Search className="h-[18px] w-[18px] text-ink-3" strokeWidth={1.5} />
+          <Search className="h-[18px] w-[18px] text-ink-3" strokeWidth={1.5} aria-hidden="true" />
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="A caller, campaign, client or words from a call"
             className="h-14 min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-3"
-            aria-label="Search calls and clients"
+            role="combobox" aria-expanded={items.length > 0} aria-controls={`${uid}-list`} aria-autocomplete="list"
+            aria-activedescendant={items.length ? optionId(sel) : undefined} aria-label="Search calls and clients"
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown') { e.preventDefault(); setSel((s) => Math.min(s + 1, items.length - 1)); }
               if (e.key === 'ArrowUp') { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)); }
-              if (e.key === 'Enter') go(sel);
+              if (e.key === 'Enter') { e.preventDefault(); go(sel); }
             }} />
         </div>
-        <ul className="max-h-[50vh] overflow-y-auto p-2" role="listbox" aria-label="Results">
-          {debounced.length < 2 && <li className="px-3 py-4 text-[13px] text-ink-3">Type two letters or more</li>}
-          {debounced.length >= 2 && !loading && !items.length && <li className="px-3 py-4 text-[13px] text-ink-3">No matches for “{debounced}”.</li>}
+        {debounced.length < 2 && <p className="px-5 py-4 text-[13px] text-ink-3">Type two letters or more</p>}
+        {debounced.length >= 2 && !loading && !items.length && <p className="px-5 py-4 text-[13px] text-ink-3" role="status">No matches for “{debounced}”</p>}
+        <ul id={`${uid}-list`} className="max-h-[50vh] overflow-y-auto p-2 empty:hidden" role="listbox" aria-label="Results">
           {items.map((it, i) => (
-            <li key={it.key} role="option" aria-selected={i === sel}>
-              <button className={`flex w-full flex-col items-start rounded-[12px] px-3 py-2 text-left ${i === sel ? 'bg-paper' : ''}`} onMouseEnter={() => setSel(i)} onClick={() => go(i)}>
-                <span className="text-[14px] text-ink">{it.title}</span>
-                <span className="text-[12px] text-ink-3">{it.sub}</span>
-              </button>
+            <li key={it.key} id={optionId(i)} role="option" aria-selected={i === sel}
+              className={`flex cursor-pointer flex-col items-start rounded-[12px] px-3 py-2 ${i === sel ? 'bg-paper' : ''}`}
+              onMouseEnter={() => setSel(i)} onMouseDown={(e) => e.preventDefault()} onClick={() => go(i)}>
+              <span className="text-[14px] text-ink">{it.title}</span>
+              <span className="text-[12px] text-ink-3">{it.sub}</span>
             </li>
           ))}
         </ul>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

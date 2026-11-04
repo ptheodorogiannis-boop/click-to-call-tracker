@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { api, ApiError, type Me } from './api';
 
 // Load a GET path; re-runs when the path changes. Keeps the last data while a refresh is in flight.
@@ -62,15 +63,36 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={push}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex flex-col items-center gap-2 md:bottom-6" role="status" aria-live="polite">
+      {createPortal(<div className="pointer-events-none fixed inset-x-0 bottom-24 z-50 flex flex-col items-center gap-2 md:bottom-6" role="status" aria-live="polite">
         {list.map((t) => (
           <div key={t.id} className={`overlay rounded-full px-4 py-2 text-[13px] font-medium ${t.tone === 'error' ? 'text-down' : 'text-ink'}`} style={{ animation: 'rise var(--dur-short) var(--ease-brand) both' }}>
             {t.text}
           </div>
         ))}
-      </div>
+      </div>, document.body)}
     </ToastCtx.Provider>
   );
+}
+
+// The setting behind the theme: follow the system (nothing stored), or a fixed choice remembered on this browser.
+export type ThemeMode = 'system' | 'light' | 'dark';
+export function useThemeMode(): [ThemeMode, (m: ThemeMode) => void] {
+  const read = (): ThemeMode => { try { const v = localStorage.getItem('ctc-theme'); return v === 'light' || v === 'dark' ? v : 'system'; } catch { return 'system'; } };
+  const [mode, setModeState] = useState<ThemeMode>(read);
+  useEffect(() => {
+    if (mode !== 'system') return;
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => { document.documentElement.dataset.theme = mq.matches ? 'dark' : 'light'; };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, [mode]);
+  const setMode = useCallback((m: ThemeMode) => {
+    try { if (m === 'system') localStorage.removeItem('ctc-theme'); else localStorage.setItem('ctc-theme', m); } catch { /* private mode */ }
+    if (m !== 'system') document.documentElement.dataset.theme = m;
+    setModeState(m);
+  }, []);
+  return [mode, setMode];
 }
 
 // Keyboard shortcut helper (⌘K / Ctrl+K).

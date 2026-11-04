@@ -20,7 +20,7 @@
   --glass-solid: #f2f2f0;
   --glass-hover: rgba(255, 255, 255, 0.86);
   --glass-press: rgba(255, 255, 255, 0.7);
-  --smoke: rgba(52, 52, 50, 0.8);
+  --smoke: rgba(52, 52, 50, 0.95);
   --smoke-solid: #3a3a38;
   --smoke-fg: #ffffff;
   --smoke-muted: #d6d6d4;
@@ -67,6 +67,11 @@
   --light-up: #166534;
   --light-down: #a80100;
   --light-bar: rgba(14, 14, 14, 0.42);
+  --light-ink: #0e0e0e;
+  --light-ink-2: #333332;
+  --light-ink-3: #575756;
+  --print-paper: #ffffff;
+  --print-line: #d8d8d6;
   --solid-pop-line: rgba(255, 255, 255, 0.14);
 
   --map-land: rgba(14, 14, 14, 0.07);
@@ -136,12 +141,11 @@ body {
   background: var(--ground);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 14px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: 'tnum' 0;
 }
-body { background: transparent; }
+body { background: transparent; font-size: 0.875rem; }
 
 /* the ground: grey with one red glow at the top right and a faint ink glow at the bottom left, drawn once */
 .ground::before {
@@ -290,6 +294,9 @@ h1, h2 { text-wrap: balance; }
   .go svg { width: 14px; height: 14px; stroke-width: 1.75; }
   a:hover > * > .go, a:hover .go, button:hover .go { transform: rotate(45deg); }
   .tone-solid .go { color: var(--solid); }
+  /* ink buttons inside a tinted tile: the fill is the tile's ink, the label the tile's own ground */
+  .tone-solid .btn:not(.btn-glass):not(.btn-danger):not(.btn-accent) { color: var(--solid); }
+  .tone-smoke .btn:not(.btn-glass):not(.btn-danger):not(.btn-accent) { color: var(--smoke-solid); }
   .tone-smoke .go { color: var(--smoke-solid); }
 
   /* ── pill navigation and segmented controls ── */
@@ -311,8 +318,8 @@ h1, h2 { text-wrap: balance; }
     display: inline-flex; align-items: center;
     transition: background-color var(--dur-micro) var(--ease-brand), color var(--dur-micro) var(--ease-brand);
   }
-  .seg button:not([aria-pressed='true']):hover, .seg a:not([aria-current='page']):hover { color: var(--ink); }
-  .seg [aria-pressed='true'], .seg [aria-current='page'] { background: var(--ink); color: var(--ground); }
+  .seg button:not([aria-pressed='true']):not([aria-selected='true']):hover, .seg a:not([aria-current='page']):hover { color: var(--ink); }
+  .seg [aria-pressed='true'], .seg [aria-current='page'], .seg [aria-selected='true'] { background: var(--ink); color: var(--ground); }
   .tone-solid .seg [aria-pressed='true'] { background: var(--solid-fg); color: var(--solid); }
   .tone-smoke .seg [aria-pressed='true'] { background: var(--smoke-fg); color: var(--smoke-solid); }
 
@@ -372,16 +379,14 @@ h1, h2 { text-wrap: balance; }
   }
   :root[data-theme='dark'] .strip { border: 1px solid var(--glass-line); }
 
-  /* ── motion: tiles rise once, bars grow, lines draw (the Hub v3 motion; off under reduced motion) ── */
+  /* ── motion: tiles rise once and bars grow (the Hub v3 motion; off under reduced motion) ── */
   .rise { animation: rise var(--dur-short) var(--ease-brand) both; }
   .bar-grow { transform-origin: bottom; animation: grow 700ms var(--ease-brand) both; }
-  .draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 900ms 120ms var(--ease-brand) forwards; }
 }
 
 /* tiles move into place but are never transparent, so content shows even where animations do not run */
 @keyframes rise { from { transform: translateY(10px); } to { transform: none; } }
 @keyframes grow { from { transform: scaleY(0); } to { transform: none; } }
-@keyframes draw { to { stroke-dashoffset: 0; } }
 @keyframes shimmer { to { background-position: -200% 0; } }
 @keyframes drawer-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -389,4 +394,40 @@ h1, h2 { text-wrap: balance; }
 @layer components {
   /* a map callout: a small glass label above its bubble */
   .callout { border-radius: 10px; border: 1px solid var(--glass-line); background: var(--glass-solid); box-shadow: var(--shadow-pop); }
+}
+
+@layer components {
+  /* the phone tab bar floats over content, so it is opaque (still no blur) */
+  .tabbar { background: var(--glass-solid); border: 1px solid var(--glass-line); box-shadow: var(--shadow-pop); }
+
+  /* the rail's names show on keyboard focus as well as hover */
+  .rail-tip { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .rail-link:hover .rail-tip, .rail-link:focus-visible .rail-tip {
+    left: calc(100% + 10px); top: 50%; transform: translateY(-50%); width: auto; height: auto; overflow: visible; clip-path: none;
+    pointer-events: none; font-size: 12px; font-weight: 500; padding: 4px 12px; border-radius: 999px;
+    background: var(--night); color: var(--on-dark); z-index: 20; }
+
+  /* a quiet problem marker: ink chip, the meaning in the text colour (red stays for the place you are and the strip) */
+  .chip-warn { color: var(--down); background: color-mix(in srgb, var(--down) 12%, transparent); }
+}
+
+/* touch: every control gets a 44 px hit area, the drawn size stays */
+@media (pointer: coarse) {
+  .seg button, .seg a, .btn, .icon-btn, .go, .hit { position: relative; }
+  .seg button::after, .seg a::after, .btn-sm::after, .icon-btn-sm::after, .go::after, .hit::after {
+    content: ''; position: absolute; inset: -8px; }
+  .btn:not(.btn-sm)::after { content: ''; position: absolute; inset: -4px; }
+}
+
+/* print: the page as a report on paper, without the frame, and dark tiles back to ink on white */
+@media print {
+  .no-print, header, aside, nav, .strip { display: none !important; }
+  html, body { background: var(--print-paper); }
+  .ground::before { display: none; }
+  .tile, .tone-smoke, .tone-solid {
+    background: var(--print-paper) !important; box-shadow: none !important; border: 1px solid var(--print-line) !important; color: var(--light-ink) !important;
+    --ink: var(--light-ink); --ink-2: var(--light-ink-2); --ink-3: var(--light-ink-3); --line: var(--print-line); --paper: var(--light-paper);
+    --up: var(--light-up); --down: var(--light-down); --bar: var(--light-bar); --bar-quiet: var(--light-paper);
+    break-inside: avoid; animation: none !important; transform: none !important; }
+  main { padding: 0 !important; }
 }

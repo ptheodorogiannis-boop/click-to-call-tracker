@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight, RotateCw, X } from 'lucide-react';
 import { pct } from '../lib/format';
@@ -92,31 +93,61 @@ export function ErrorState({ error, retry }: { error: { message: string } | null
   );
 }
 
-// A side panel over the page (the call drawer, the client editor). Escape and the scrim close it; focus moves in.
-export function Drawer({ open, onClose, title, children, wide = false }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean }) {
-  const ref = useRef<HTMLDivElement>(null);
+// While a dialog is open the app behind it is inert (no focus, no clicks, no screen reader) and does not scroll.
+// Dialogs render outside #root, so they stay live.
+export function useModal(open: boolean, panel: React.RefObject<HTMLElement | null>, onClose: () => void) {
+  const close = useRef(onClose);
+  close.current = onClose;
   useEffect(() => {
     if (!open) return;
+    const root = document.getElementById('root');
     const prev = document.activeElement as HTMLElement | null;
-    ref.current?.focus();
-    const on = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    root?.setAttribute('inert', '');
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    if (!panel.current?.contains(document.activeElement)) panel.current?.focus();
+    const on = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); close.current(); return; }
+      if (e.key !== 'Tab' || !panel.current) return;
+      const items = [...panel.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), audio[controls], [tabindex]:not([tabindex="-1"])')];
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === panel.current)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
     window.addEventListener('keydown', on);
-    return () => { window.removeEventListener('keydown', on); prev?.focus?.(); };
-  }, [open, onClose]);
+    return () => {
+      window.removeEventListener('keydown', on);
+      root?.removeAttribute('inert');
+      document.body.style.overflow = overflow;
+      prev?.focus?.();
+    };
+  }, [open, panel]);
+}
+
+// A side panel over the page (the call drawer, the client editor). Escape and the scrim close it; focus moves in and
+// stays in. `canClose` lets a form with unsaved changes ask first.
+export function Drawer({ open, onClose, title, children, wide = false, canClose }:
+  { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean; canClose?: () => boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const tryClose = () => { if (!canClose || canClose()) onClose(); };
+  useModal(open, ref, tryClose);
   if (!open) return null;
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-40">
-      <div className="absolute inset-0 bg-scrim" style={{ animation: 'fade-in var(--dur-short) var(--ease-brand) both' }} onClick={onClose} />
+      <div className="absolute inset-0 bg-scrim" style={{ animation: 'fade-in var(--dur-short) var(--ease-brand) both' }} onClick={tryClose} />
       <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}
         className={`overlay absolute inset-y-2 right-2 flex w-[calc(100%-16px)] flex-col overflow-hidden rounded-tile outline-none ${wide ? 'max-w-[760px]' : 'max-w-[560px]'}`}
         style={{ animation: 'drawer-in var(--dur-short) var(--ease-brand) both' }}>
         <div className="flex items-center justify-between gap-3 border-b border-line px-6 py-4">
           <h2 className="tile-title truncate">{title}</h2>
-          <button className="icon-btn icon-btn-sm" onClick={onClose} aria-label="Close"><X /></button>
+          <button className="icon-btn icon-btn-sm" onClick={tryClose} aria-label="Close"><X /></button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

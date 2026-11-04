@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { Copy, Trash2 } from 'lucide-react';
 import { api, type ClientEditor as Data } from '../lib/api';
 import { useLoad, useSession, useToast } from '../lib/hooks';
@@ -28,26 +28,45 @@ export default function ClientEditor({ id, onClose, onSaved }: { id: string | nu
   const { data, error, reload, setData } = useLoad<Data>(id ? `/clients/${encodeURIComponent(id)}` : null);
   const [tab, setTab] = useState<Tab>('details');
   const { isOwner, me } = useSession();
-  useEffect(() => setTab('details'), [id]);
+  // Forms with unsaved changes, so closing can ask first. Every tab stays mounted, so switching tabs keeps edits.
+  const dirty = useRef<Record<string, boolean>>({});
+  const markDirty = (form: string, on: boolean) => { dirty.current[form] = on; };
+  useEffect(() => { setTab('details'); dirty.current = {}; }, [id]);
+  const canClose = () => !Object.values(dirty.current).some(Boolean) || window.confirm('Close without saving your changes?');
   const isNew = id === '';
   const current = isNew ? EMPTY : data && data.client.id === id ? data : null;
+  const tabs = TABS.filter((t) => !t.owner || isOwner);
+  const onTabKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const i = tabs.findIndex((t) => t.id === tab);
+    const next = e.key === 'ArrowRight' ? (i + 1) % tabs.length : e.key === 'ArrowLeft' ? (i - 1 + tabs.length) % tabs.length : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : -1;
+    if (next < 0) return;
+    e.preventDefault();
+    setTab(tabs[next].id);
+    document.getElementById(`client-tab-${tabs[next].id}`)?.focus();
+  };
+  const panel = (t: Tab) => ({ role: 'tabpanel', id: `client-panel-${t}`, 'aria-labelledby': `client-tab-${t}`, hidden: tab !== t } as const);
 
   return (
-    <Drawer open={id !== null} onClose={onClose} wide title={isNew ? 'New client' : current?.client.name || 'Client'}>
+    <Drawer open={id !== null} onClose={onClose} canClose={canClose} wide title={isNew ? 'New client' : current?.client.name || 'Client'}>
       {error ? <ErrorState error={error} retry={reload} /> : !current ? <Loading rows={8} /> : (
         <>
           {!isNew && (
             <div className="seg mb-6 flex-wrap" role="tablist" aria-label="Client settings">
-              {TABS.filter((t) => !t.owner || isOwner).map((t) => (
-                <button key={t.id} role="tab" aria-selected={tab === t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>{t.label}</button>
+              {tabs.map((t) => (
+                <button key={t.id} id={`client-tab-${t.id}`} role="tab" aria-selected={tab === t.id} aria-controls={`client-panel-${t.id}`}
+                  tabIndex={tab === t.id ? 0 : -1} onClick={() => setTab(t.id)} onKeyDown={onTabKey}>{t.label}</button>
               ))}
             </div>
           )}
-          {tab === 'details' && <Details data={current} isNew={isNew} onSaved={(d) => { onSaved(); if (isNew) onClose(); else setData(d); }} onDeleted={() => { onSaved(); onClose(); }} />}
-          {tab === 'numbers' && <Numbers data={current} onChange={(numbers) => { setData({ ...current, numbers }); onSaved(); }} />}
-          {tab === 'conversions' && <Conversions data={current} onSaved={(d) => setData(d)} />}
-          {tab === 'website' && <Website data={current} base={me.public_base_url || window.location.origin} />}
-          {tab === 'logins' && <Logins data={current} onChange={reload} />}
+          <div {...panel('details')}><Details key={current.client.id || 'new'} data={current} isNew={isNew} onDirty={(on) => markDirty('details', on)} onSaved={(d) => { onSaved(); if (isNew) { dirty.current = {}; onClose(); } else setData(d); }} onDeleted={() => { onSaved(); dirty.current = {}; onClose(); }} /></div>
+          {!isNew && (
+            <>
+              <div {...panel('numbers')}><Numbers data={current} onChange={(numbers) => { setData({ ...current, numbers }); onSaved(); }} /></div>
+              <div {...panel('conversions')}><Conversions key={current.client.id} data={current} onDirty={(on) => markDirty('conversions', on)} onSaved={(d) => setData(d)} /></div>
+              <div {...panel('website')}><Website data={current} base={me.public_base_url || window.location.origin} /></div>
+              {isOwner && <div {...panel('logins')}><Logins data={current} onChange={reload} /></div>}
+            </>
+          )}
         </>
       )}
     </Drawer>
@@ -80,19 +99,19 @@ function useSave() {
 
 const slug = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
 
-function Details({ data, isNew, onSaved, onDeleted }: { data: Data; isNew: boolean; onSaved: (d: Data) => void; onDeleted: () => void }) {
+function Details({ data, isNew, onSaved, onDeleted, onDirty }: { data: Data; isNew: boolean; onSaved: (d: Data) => void; onDeleted: () => void; onDirty: (on: boolean) => void }) {
   const { isOwner } = useSession();
   const toast = useToast();
   const [c, setC] = useState(data.client);
   const [token, setToken] = useState('');
   const [idTouched, setIdTouched] = useState(false);
   const { busy, err, save } = useSave();
-  const set = <K extends keyof Data['client']>(k: K, v: Data['client'][K]) => setC((x) => ({ ...x, [k]: v }));
+  const set = <K extends keyof Data['client']>(k: K, v: Data['client'][K]) => { setC((x) => ({ ...x, [k]: v })); onDirty(true); };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const saved = await save({ ...payload({ ...data, client: c }), twilio_auth_token: token || undefined }, isNew ? `${c.name} added` : 'Saved');
-    if (saved) { setToken(''); onSaved({ ...data, client: saved }); }
+    const saved = await save({ ...payload({ ...data, client: { ...c, config: data.client.config } }), twilio_auth_token: token || undefined }, isNew ? `${c.name} added` : 'Saved');
+    if (saved) { setToken(''); onDirty(false); onSaved({ ...data, client: saved }); }
   };
   const remove = async () => {
     if (!window.confirm(`Delete ${c.name}? Its tracking numbers are removed from the pool.`)) return;
@@ -144,7 +163,7 @@ function Details({ data, isNew, onSaved, onDeleted }: { data: Data; isNew: boole
           <input id="c-sid" className="input num" placeholder="AC…" value={c.twilio_account_sid} onChange={(e) => set('twilio_account_sid', e.target.value.trim())} />
         </Field>
         <Field label="Twilio auth token" htmlFor="c-tok" hint={c.twilio_auth_token_masked ? `Saved, ends in ${c.twilio_auth_token_masked.slice(-4)}. Leave empty to keep it.` : 'Stored on the server, never shown again'}>
-          <input id="c-tok" className="input" type="password" autoComplete="new-password" value={token} onChange={(e) => setToken(e.target.value)} />
+          <input id="c-tok" className="input" type="password" autoComplete="new-password" value={token} onChange={(e) => { setToken(e.target.value); onDirty(true); }} />
         </Field>
       </div>
       {err && <p className="text-[13px] text-down" role="alert">{err}</p>}
@@ -199,7 +218,7 @@ function Numbers({ data, onChange }: { data: Data; onChange: (n: Data['numbers']
   );
 }
 
-function Conversions({ data, onSaved }: { data: Data; onSaved: (d: Data) => void }) {
+function Conversions({ data, onSaved, onDirty }: { data: Data; onSaved: (d: Data) => void; onDirty: (on: boolean) => void }) {
   const c = data.client.config;
   const [g, setG] = useState({ customerId: c.googleAds.customerId || '', conversionActionId: c.googleAds.conversionActionId || '' });
   const [m, setM] = useState({ pixelId: c.meta.pixelId, testEventCode: c.meta.testEventCode, capiToken: '' });
@@ -208,11 +227,11 @@ function Conversions({ data, onSaved }: { data: Data; onSaved: (d: Data) => void
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const saved = await save({ ...payload(data), googleAds: g, meta: { ...m, capiToken: m.capiToken || undefined }, ga4: { ...a, apiSecret: a.apiSecret || undefined } }, 'Conversion settings saved');
-    if (saved) { setM((x) => ({ ...x, capiToken: '' })); setA((x) => ({ ...x, apiSecret: '' })); onSaved({ ...data, client: saved }); }
+    if (saved) { setM((x) => ({ ...x, capiToken: '' })); setA((x) => ({ ...x, apiSecret: '' })); onDirty(false); onSaved({ ...data, client: saved }); }
   };
   const kept = (masked: string) => (masked ? `Saved, ends in ${masked.slice(-4)}. Leave empty to keep it` : 'Stored on the server, never shown again');
   return (
-    <form className="space-y-7" onSubmit={submit}>
+    <form className="space-y-7" onSubmit={submit} onChange={() => onDirty(true)}>
       <p className="max-w-[60ch] text-[13px] text-ink-2">Qualified calls are sent here as conversions, with the lead value. Google Ads needs the visitor’s click id, so it only receives calls from ad clicks.</p>
       <fieldset className="grid gap-4 sm:grid-cols-2">
         <legend className="mb-3 text-[14px] font-medium">Google Ads</legend>

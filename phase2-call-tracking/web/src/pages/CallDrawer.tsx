@@ -38,7 +38,7 @@ function CallBody({ call, onUpdate }: { call: Call; onUpdate: (c: Call) => void 
         <p className="text-[13px] text-ink-3">{when(call.started_at)}, {call.client_name}</p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {call.answered ? <span className="chip">Answered, {duration(call.duration_sec)}</span>
-            : <span className={call.to_call_back ? 'chip chip-alert' : 'chip'}>{call.status === 'ringing' ? 'Ringing' : 'Missed'}</span>}
+            : <span className={call.to_call_back ? 'chip chip-warn' : 'chip'}>{call.status === 'ringing' ? 'Ringing' : call.to_call_back ? 'Missed, to call back' : 'Missed'}</span>}
           {call.first_time != null && <span className="chip">{call.first_time ? 'First call' : 'Called before'}</span>}
           {call.qualified && <span className="chip">Long enough to qualify</span>}
           {call.called_back_at && <span className="chip chip-good"><Check /> Called back {ago(call.called_back_at)}</span>}

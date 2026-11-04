@@ -16,7 +16,7 @@ export function Sparkline({ values, accent = false, height = 40, label }: { valu
     <div className="relative" style={{ height }}>
       <svg viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="none" className="block h-full w-full" role="img" aria-label={label}>
         <title id={id}>{label}</title>
-        <polyline className="draw" pathLength={1} fill="none" stroke={accent ? 'var(--brand)' : 'currentColor'} strokeWidth="1.5"
+        <polyline fill="none" stroke={accent ? 'var(--brand)' : 'currentColor'} strokeWidth="1.5"
           vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" points={pts.map((p) => p.join(',')).join(' ')} />
       </svg>
       <span className="absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full" aria-hidden="true"
@@ -74,8 +74,8 @@ export function GreeceMap({ geo, compact = false }: { geo: Geo; compact?: boolea
           const on = hover === r.region;
           return (
             <g key={r.region} onMouseEnter={() => setHover(r.region)} onMouseLeave={() => setHover(null)}>
-              <circle cx={p[0]} cy={p[1]} r={8 + Math.sqrt(r.calls / max) * (compact ? 32 : 40)} fill="var(--brand)" opacity={on ? 0.55 : 0.3} />
-              <circle cx={p[0]} cy={p[1]} r="5" fill="var(--brand)" />
+              <circle cx={p[0]} cy={p[1]} r={8 + Math.sqrt(r.calls / max) * (compact ? 32 : 40)} fill="var(--ink)" opacity={on ? 0.3 : 0.16} />
+              <circle cx={p[0]} cy={p[1]} r="4" fill="var(--ink)" />
             </g>
           );
         })}
