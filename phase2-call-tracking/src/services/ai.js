@@ -48,7 +48,7 @@ async function summarise(callSid) {
 
   const response = await anthropic().beta.messages.create({
     model: MODEL(),
-    max_tokens: 2000,
+    max_tokens: 4000, // Opus 5.5 always thinks; leave room for the JSON after it
     // Refusals on Claude Opus 5.5 fall back to another model server-side instead of failing the call.
     betas: ['server-side-fallback-2026-07-01'],
     fallbacks: 'default',

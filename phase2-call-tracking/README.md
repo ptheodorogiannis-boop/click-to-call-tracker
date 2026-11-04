@@ -78,7 +78,9 @@ Or mark elements explicitly: `<a href="tel:+302101234567" data-ctc-dni>210 123 4
 ## GDPR / recording (Greece)
 Recording requires informing the caller. The server plays a Greek announcement **before
 connecting** (`config.defaultConsentMessageEl`, overridable per client). To disable recording for
-a client, set `recording_enabled = 0`. Transcripts are personal data — store/retain per your DPA.
+a client, set `recording_enabled = 0`. Transcripts are personal data — store/retain per your DPA. With Whisper and AI summaries on, two more processors
+handle each recorded call: OpenAI (the audio, for the transcript) and Anthropic (the transcript, for the summary).
+Name both in the client's privacy notice and processing agreement before switching them on.
 This is a compliance-sensitive feature; have the client sign off on the announcement wording and
 retention period.
 
@@ -115,7 +117,8 @@ personal token in **Settings › API and MCP** and send it as `Authorization: Be
   by email with the call log attached (Clients › Alerts and reports). Email needs `SMTP_HOST`.
 - **Webhooks** (Settings › API, MCP and webhooks): every call as JSON when it ends and when someone works it, signed
   with `X-CallTrack-Signature: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<body>">`, three tries.
-- **AI summaries** (with `ANTHROPIC_API_KEY`): a Greek summary and a suggested label and score per transcript, from
+- **AI summaries** (with `ANTHROPIC_API_KEY`, and transcripts from Whisper: `TRANSCRIPTION_PROVIDER=openai` and
+  `OPENAI_API_KEY`; the default provider makes no transcripts, so no summaries): a Greek summary and a suggested label and score per transcript, from
   Claude (`claude-opus-5-5` by default, `AI_MODEL` to change; refusals fall back server-side). A suggestion only:
   the lead status changes when someone chooses it.
 - **Health** on the client board: the number pool ran out, conversion uploads failing, no calls for a week.

@@ -60,8 +60,8 @@ function buildServer(user) {
   const filters = {
     client_id: z.string().optional(),
     since: date.optional(), until: date.optional(),
-    status: z.enum(['answered', 'missed', 'to_call_back']).optional(),
-    channel: z.string().optional().describe('google_ads, meta_ads, microsoft_ads, other_paid, google_organic, meta_organic, referral, direct'),
+    status: z.enum(['answered', 'missed', 'to_call_back', 'blocked']).optional().describe('blocked = callers on the block list, turned away; otherwise blocked calls are left out'),
+    channel: z.string().optional().describe('google_ads, meta_ads, microsoft_ads, other_paid, google_organic, meta_organic, referral, direct; fixed numbers: google_business, print, radio, tv, outdoor, partner, offline_other'),
     lead_status: z.enum(['new', 'good', 'not_lead', 'customer', 'spam']).optional(),
     tag: z.string().optional(),
     leads_only: z.boolean().optional(),

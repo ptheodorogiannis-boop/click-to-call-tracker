@@ -86,7 +86,7 @@ test('a fixed number carries its own source and is never handed to a website vis
   assert.equal((await s.post('/api/v2/clients/acme/numbers', { phone: '+302100000098', kind: 'fixed', source: 'nowhere' })).status, 400);
   for (let i = 0; i < 6; i++) {
     const a = await fetch(srv.base + '/api/dni/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteId: 'acme', attribution: {} }) }).then((r) => r.json());
-    assert.notEqual(a.phone, '+302100000099');
+    assert.equal(a.phone, '+302100000001', 'only the pool number is handed out');
   }
   const callSid = sid();
   await form('/webhooks/voice/incoming', { To: '+302100000099', From: '+302105550000', CallSid: callSid });
@@ -165,10 +165,14 @@ test('missed-call alerts go to Slack and email when switched on', async () => {
 });
 
 test('health flags: a full pool and failing uploads show on the client board', async () => {
-  db.prepare(`INSERT INTO sessions (id, client_id, phone, expires_at, fallback) VALUES ('s-full', 'acme', '+302100000001', datetime('now', '+1 hour'), 1)`).run();
+  // beta has one pool number: the second visitor in the same hour shares it, and that is recorded
+  db.prepare("DELETE FROM sessions WHERE client_id = 'beta'").run();
+  const assign = () => fetch(srv.base + '/api/dni/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteId: 'beta', attribution: {} }) }).then((r) => r.json());
+  assert.equal((await assign()).fallback, false);
+  assert.equal((await assign()).fallback, true);
+  assert.ok(calls.clientBoard(people.owner, {}).clients.find((k) => k.id === 'beta').flags.includes('pool_full'));
   db.prepare(`UPDATE calls SET conv_google = 'error: invalid gclid' WHERE call_sid = 'CA1'`).run();
   const row = calls.clientBoard(people.owner, {}).clients.find((k) => k.id === 'acme');
-  assert.ok(row.flags.includes('pool_full'));
   assert.ok(row.flags.includes('uploads_failing'));
 });
 
