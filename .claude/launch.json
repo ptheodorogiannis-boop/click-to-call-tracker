@@ -4,8 +4,20 @@
     {
       "name": "ctc-static",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8765"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8765"
+      ],
       "port": 8765
+    },
+    {
+      "name": "calltrack-demo",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "phase2-call-tracking/tools/run-demo.js"
+      ],
+      "port": 8099
     }
   ]
 }

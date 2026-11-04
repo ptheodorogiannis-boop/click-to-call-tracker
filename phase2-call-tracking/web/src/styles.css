@@ -1,0 +1,393 @@
+/* Hallmark · 2026-11-04 · genre: modern-minimal · theme: locked (Ruler Hub glass, shared with Ruler Reports) · shape: app screen · scope: app
+ * critique: ink on glass over a grey ground with one red glow; red marks the one place you are and the one thing to do now; figures large and light; the signature is the call-back queue
+ * redesign: full (keeps every API route and action of the v1 admin) · signature: the red strip and the queue it opens · v2.0.0 */
+/* Hallmark · answered F5 · 40 px glass circles are the icon buttons of the locked Ruler Hub system, drawn in ink, never tinted */
+/* Hallmark · answered F7 · navigation, segmented controls and buttons are pills in the locked system; tiles keep the 24 px tile radius */
+/* Hallmark · answered F24 · overlays (menus, the call drawer, the search dialog) are the one place glass keeps its blur */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ───────────── tokens: the Ruler Hub glass system (values from ruler-reports-v2/src/app/globals.css) ───────────── */
+:root {
+  --font-sans: 'Manrope Variable', Manrope, ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+
+  --ground: #e4e4e2;
+  --glow-brand: rgba(219, 1, 0, 0.28);
+  --glow-ink: rgba(14, 14, 14, 0.1);
+  --glass: rgba(255, 255, 255, 0.62);
+  --glass-line: rgba(255, 255, 255, 0.75);
+  --glass-solid: #f2f2f0;
+  --glass-hover: rgba(255, 255, 255, 0.86);
+  --glass-press: rgba(255, 255, 255, 0.7);
+  --smoke: rgba(52, 52, 50, 0.8);
+  --smoke-solid: #3a3a38;
+  --smoke-fg: #ffffff;
+  --smoke-muted: #d6d6d4;
+  --solid: #0e0e0e;
+  --solid-fg: #ffffff;
+  --solid-muted: #a1a19f;
+  --inset: rgba(255, 255, 255, 0.8);
+  --hairline: rgba(14, 14, 14, 0.1);
+
+  --ink: #0e0e0e;
+  --ink-2: #333332;
+  --ink-3: #575756;
+  --line: var(--hairline);
+  --line-strong: rgba(14, 14, 14, 0.24);
+  --paper: rgba(14, 14, 14, 0.05);
+  --field: rgba(255, 255, 255, 0.72);
+  --brand: #db0100;
+  --brand-press: #b80100;
+  --brand-soft: color-mix(in srgb, var(--brand) 10%, transparent);
+  --up: #166534;
+  --down: #a80100;
+  --warning: #7d5200;
+  --focus: #0e0e0e;
+  --on-dark: #ffffff;
+  --ink-hover: #2a2a29;
+  --ink-press: #1c1c1b;
+  --scrim: rgba(14, 14, 14, 0.42);
+
+  /* what a dark tile (smoke, or solid in light mode) uses inside */
+  --on-dark-line: rgba(255, 255, 255, 0.14);
+  --on-dark-paper: rgba(255, 255, 255, 0.08);
+  --on-dark-up: #6fbf8b;
+  --on-dark-down: #ff8a84;
+  --on-dark-bar: rgba(255, 255, 255, 0.5);
+  --on-dark-bar-quiet: rgba(255, 255, 255, 0.08);
+  --bar: rgba(14, 14, 14, 0.42);
+  --bar-quiet: rgba(14, 14, 14, 0.05);
+  --solid-pop: #262625;
+  --night: #0e0e0e; /* the strip, ink on white fills, menu options: dark in both themes */
+  --ember: #5a0000;
+  --option-ground: #f2f2f0;
+  --light-line: rgba(14, 14, 14, 0.1);
+  --light-paper: rgba(14, 14, 14, 0.05);
+  --light-up: #166534;
+  --light-down: #a80100;
+  --light-bar: rgba(14, 14, 14, 0.42);
+  --solid-pop-line: rgba(255, 255, 255, 0.14);
+
+  --map-land: rgba(14, 14, 14, 0.07);
+  --map-home: rgba(255, 255, 255, 0.7);
+  --map-edge: rgba(14, 14, 14, 0.16);
+
+  --r-tile: 24px;
+  --r-pop: 16px;
+  --r-input: 12px;
+  --r-chip: 6px;
+  --shadow-card: 0 1px 2px rgba(14, 14, 14, 0.04), 0 24px 48px -28px rgba(14, 14, 14, 0.35);
+  --shadow-pop: 0 16px 40px -16px rgba(14, 14, 14, 0.4);
+  --ease-brand: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-micro: 160ms;
+  --dur-short: 240ms;
+}
+
+:root[data-theme='dark'] {
+  --ground: #0b0b0b;
+  --glow-brand: rgba(219, 1, 0, 0.26);
+  --glow-ink: rgba(255, 255, 255, 0.06);
+  --glass: rgba(255, 255, 255, 0.07);
+  --glass-line: rgba(255, 255, 255, 0.12);
+  --glass-solid: #1a1a1a;
+  --glass-hover: rgba(255, 255, 255, 0.12);
+  --glass-press: rgba(255, 255, 255, 0.09);
+  --smoke: rgba(255, 255, 255, 0.14);
+  --smoke-solid: #333332;
+  --smoke-muted: #c5c5c3;
+  --solid: #f4f4f2;
+  --solid-fg: #0e0e0e;
+  --solid-muted: #575756;
+  --inset: rgba(20, 20, 20, 0.8);
+  --hairline: rgba(255, 255, 255, 0.1);
+  --ink: #ffffff;
+  --ink-2: #e2e2e0;
+  --ink-3: #a1a19f;
+  --line-strong: rgba(255, 255, 255, 0.24);
+  --paper: rgba(255, 255, 255, 0.06);
+  --field: rgba(255, 255, 255, 0.06);
+  --up: #6fbf8b;
+  --down: #ff8a84;
+  --warning: #d9a441;
+  --focus: #ffffff;
+  --ink-hover: #e2e2e0;
+  --ink-press: #c5c5c3;
+  --scrim: rgba(0, 0, 0, 0.6);
+  --bar: rgba(255, 255, 255, 0.5);
+  --bar-quiet: rgba(255, 255, 255, 0.06);
+  --solid-pop: #ffffff;
+  --solid-pop-line: rgba(14, 14, 14, 0.1);
+  --map-land: rgba(255, 255, 255, 0.05);
+  --map-home: rgba(255, 255, 255, 0.12);
+  --map-edge: rgba(255, 255, 255, 0.16);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 24px 48px -28px rgba(0, 0, 0, 0.8);
+  --shadow-pop: 0 16px 40px -16px rgba(0, 0, 0, 0.8);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root { --glass: var(--glass-solid); --smoke: var(--smoke-solid); }
+}
+
+/* ───────────── base ───────────── */
+html,
+body {
+  overflow-x: clip;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'tnum' 0;
+}
+body { background: transparent; }
+
+/* the ground: grey with one red glow at the top right and a faint ink glow at the bottom left, drawn once */
+.ground::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  pointer-events: none;
+  background:
+    radial-gradient(60vmax 45vmax at 88% -6%, var(--glow-brand), transparent 70%),
+    radial-gradient(55vmax 45vmax at -8% 108%, var(--glow-ink), transparent 70%),
+    var(--ground);
+}
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* a dialog takes focus so screen readers land in it; the panel itself never draws a ring */
+[role='dialog']:focus-visible { outline: none; }
+.tone-smoke :focus-visible,
+.tone-solid :focus-visible { outline-color: var(--ink); }
+
+h1, h2, h3, h4 { overflow-wrap: break-word; min-width: 0; }
+h1, h2 { text-wrap: balance; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@layer components {
+  /* ── tiles: glass without blur (they repeat), and the Quantix tones ── */
+  .tile {
+    border-radius: var(--r-tile);
+    border: 1px solid var(--glass-line);
+    background: var(--glass);
+    box-shadow: var(--shadow-card);
+    min-width: 0;
+  }
+  .tone-smoke {
+    background: var(--smoke);
+    border-color: var(--on-dark-line);
+    color: var(--smoke-fg);
+    --ink: var(--smoke-fg);
+    --ink-2: var(--smoke-muted);
+    --ink-3: var(--smoke-muted);
+    --line: var(--on-dark-line);
+    --paper: var(--on-dark-paper);
+    --field: var(--on-dark-paper);
+    --up: var(--on-dark-up);
+    --down: var(--on-dark-down);
+    --bar: var(--on-dark-bar);
+    --bar-quiet: var(--on-dark-bar-quiet);
+    --glass-solid: var(--smoke-solid);
+    --glass-line: var(--on-dark-line);
+  }
+  .tone-solid {
+    background: var(--solid);
+    border-color: var(--solid);
+    color: var(--solid-fg);
+    --ink: var(--solid-fg);
+    --ink-2: var(--solid-muted);
+    --ink-3: var(--solid-muted);
+    --line: var(--on-dark-line);
+    --paper: var(--on-dark-paper);
+    --field: var(--on-dark-paper);
+    --up: var(--on-dark-up);
+    --down: var(--on-dark-down);
+    --bar: var(--on-dark-bar);
+    --bar-quiet: var(--on-dark-bar-quiet);
+    --glass-solid: var(--solid-pop);
+    --glass-line: var(--solid-pop-line);
+  }
+  /* in dark mode the solid tile is the light one: it keeps the light feedback colours */
+  :root[data-theme='dark'] .tone-solid {
+    --line: var(--light-line);
+    --paper: var(--light-paper);
+    --field: var(--light-paper);
+    --up: var(--light-up);
+    --down: var(--light-down);
+    --bar: var(--light-bar);
+    --bar-quiet: var(--light-paper);
+  }
+  .tone-inset { background: var(--inset); border: 1px solid var(--hairline); box-shadow: none; }
+
+  /* an overlay over content: the one place glass keeps its blur */
+  .overlay {
+    border: 1px solid var(--glass-line);
+    background: color-mix(in srgb, var(--glass-solid) 90%, transparent);
+    box-shadow: var(--shadow-pop);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    backdrop-filter: blur(24px) saturate(140%);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .overlay { background: var(--glass-solid); }
+  }
+
+  /* ── figures ── */
+  .figure { font-size: 34px; line-height: 40px; font-weight: 300; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .figure-sm { font-size: 24px; line-height: 30px; font-weight: 300; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .num { font-variant-numeric: tabular-nums; }
+  .page-title { font-size: 40px; line-height: 44px; font-weight: 400; letter-spacing: -0.03em; }
+  .tile-title { font-size: 16px; line-height: 22px; font-weight: 500; }
+
+  /* ── buttons: ink pill primary, glass secondary, red only for the one call to action ── */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 36px; padding: 0 16px; border-radius: 999px; white-space: nowrap;
+    font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+    background: var(--ink); color: var(--ground); border: 1px solid transparent;
+    transition: background-color var(--dur-micro) var(--ease-brand), transform var(--dur-micro) var(--ease-brand);
+  }
+  .btn:hover { background: var(--ink-hover); }
+  .btn:active { background: var(--ink-press); transform: scale(0.98); }
+  .btn:disabled, .btn[aria-disabled='true'] { opacity: 0.45; cursor: not-allowed; transform: none; }
+  .btn-glass { background: var(--glass); color: var(--ink); border-color: var(--glass-line); }
+  .btn-glass:hover { background: var(--glass-hover); }
+  .btn-glass:active { background: var(--glass-press); }
+  .tone-smoke .btn-glass, .tone-solid .btn-glass { background: var(--paper); border-color: var(--line); }
+  .btn-accent { background: var(--on-dark); color: var(--night); }
+  .btn-accent:hover { background: var(--glass-solid); }
+  .btn-danger { background: transparent; color: var(--down); border-color: var(--line-strong); }
+  .btn-danger:hover { background: var(--brand-soft); }
+  .btn-sm { height: 30px; padding: 0 12px; font-size: 12px; }
+  .btn svg { width: 15px; height: 15px; stroke-width: 1.5; }
+
+  .icon-btn {
+    position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 999px;
+    background: var(--glass); border: 1px solid var(--glass-line); color: var(--ink-2); cursor: pointer;
+    transition: transform var(--dur-micro) var(--ease-brand), background-color var(--dur-micro) var(--ease-brand);
+  }
+  .icon-btn:hover { background: var(--glass-hover); transform: scale(1.06); }
+  .icon-btn:active { background: var(--glass-press); transform: scale(0.97); }
+  .icon-btn[aria-current='page'] { background: var(--brand); color: var(--on-dark); border-color: transparent; }
+  .icon-btn svg { width: 18px; height: 18px; stroke-width: 1.5; }
+  .icon-btn-sm { width: 30px; height: 30px; }
+  .icon-btn-sm svg { width: 15px; height: 15px; }
+
+  /* the "go" circle in a tile's corner */
+  .go {
+    display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; flex: none;
+    background: var(--ink); color: var(--ground);
+    transition: transform var(--dur-short) var(--ease-brand);
+  }
+  .go svg { width: 14px; height: 14px; stroke-width: 1.75; }
+  a:hover > * > .go, a:hover .go, button:hover .go { transform: rotate(45deg); }
+  .tone-solid .go { color: var(--solid); }
+  .tone-smoke .go { color: var(--smoke-solid); }
+
+  /* ── pill navigation and segmented controls ── */
+  .pill-nav { display: flex; gap: 2px; padding: 4px; border-radius: 999px; }
+  .pill-nav a {
+    display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 16px; border-radius: 999px;
+    color: var(--ink-2); font-size: 13px; font-weight: 500; white-space: nowrap;
+    transition: background-color var(--dur-micro) var(--ease-brand), color var(--dur-micro) var(--ease-brand);
+  }
+  .pill-nav a:hover { background: var(--paper); color: var(--ink); }
+  .pill-nav a[aria-current='page'] { background: var(--brand); color: var(--on-dark); }
+  .count { min-width: 18px; padding: 0 4px; border-radius: 999px; background: var(--ink); color: var(--ground); font-size: 11px; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+  .pill-nav a[aria-current='page'] .count { background: var(--on-dark); color: var(--night); }
+
+  .seg { display: inline-flex; padding: 4px; border-radius: 999px; background: var(--paper); gap: 2px; }
+  .seg button, .seg a {
+    height: 28px; padding: 0 12px; border-radius: 999px; font: inherit; font-size: 12px; font-weight: 500;
+    color: var(--ink-3); background: transparent; border: 0; cursor: pointer; white-space: nowrap;
+    display: inline-flex; align-items: center;
+    transition: background-color var(--dur-micro) var(--ease-brand), color var(--dur-micro) var(--ease-brand);
+  }
+  .seg button:not([aria-pressed='true']):hover, .seg a:not([aria-current='page']):hover { color: var(--ink); }
+  .seg [aria-pressed='true'], .seg [aria-current='page'] { background: var(--ink); color: var(--ground); }
+  .tone-solid .seg [aria-pressed='true'] { background: var(--solid-fg); color: var(--solid); }
+  .tone-smoke .seg [aria-pressed='true'] { background: var(--smoke-fg); color: var(--smoke-solid); }
+
+  /* ── fields ── */
+  .input, .select, .textarea {
+    width: 100%; min-width: 0; height: 38px; padding: 0 12px; border-radius: var(--r-input);
+    background: var(--field); color: var(--ink); border: 1px solid var(--line); font: inherit; font-size: 14px;
+    transition: border-color var(--dur-micro) var(--ease-brand), background-color var(--dur-micro) var(--ease-brand);
+  }
+  .textarea { height: auto; min-height: 84px; padding: 8px 12px; resize: vertical; line-height: 1.45; }
+  .input::placeholder, .textarea::placeholder { color: var(--ink-3); }
+  .input:hover, .select:hover, .textarea:hover { border-color: var(--line-strong); }
+  .input:focus-visible, .select:focus-visible, .textarea:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; border-color: transparent; }
+  .input:disabled, .select:disabled { opacity: 0.5; cursor: not-allowed; }
+  .input[aria-invalid='true'] { border-color: var(--down); }
+  .select { appearance: none; padding-right: 32px; cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%), linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+    background-position: calc(100% - 17px) 17px, calc(100% - 12px) 17px; background-size: 5px 5px; background-repeat: no-repeat; }
+  .select option { color: var(--night); background: var(--option-ground); }
+  .label { display: block; font-size: 12px; font-weight: 500; color: var(--ink-2); margin-bottom: 4px; }
+  .hint { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+  .check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+  .check input { width: 18px; height: 18px; accent-color: var(--ink); }
+
+  /* ── chips and status ── */
+  .chip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 500; background: var(--paper); color: var(--ink-2); white-space: nowrap; }
+  .chip-alert { background: var(--brand); color: var(--on-dark); }
+  .chip-good { color: var(--up); background: color-mix(in srgb, var(--up) 12%, transparent); }
+  .chip svg { width: 12px; height: 12px; stroke-width: 1.75; }
+  .tag { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 8px; border-radius: var(--r-chip);
+    font-size: 12px; background: var(--paper); color: var(--ink-2); }
+
+  /* ── tables: dense rows, sentence-case heads ── */
+  .table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .table th { text-align: left; font-weight: 500; font-size: 12px; color: var(--ink-3); padding: 0 12px 8px; white-space: nowrap; }
+  .table td { padding: 12px; border-top: 1px solid var(--line); vertical-align: middle; }
+  .table th:first-child, .table td:first-child { padding-left: 0; }
+  .table th:last-child, .table td:last-child { padding-right: 0; }
+  .table .r { text-align: right; }
+  .table tbody tr { transition: background-color var(--dur-micro) var(--ease-brand); }
+  .table tbody tr[data-href] { cursor: pointer; }
+  .table tbody tr[data-href]:hover { background: var(--paper); }
+  .table tbody tr[aria-selected='true'] { background: var(--paper); }
+  .sort { display: inline-flex; align-items: center; gap: 4px; color: inherit; background: none; border: 0; font: inherit; cursor: pointer; padding: 0; }
+  .sort:hover { color: var(--ink); }
+
+  /* ── skeletons ── */
+  .skel { border-radius: 8px; background: linear-gradient(90deg, color-mix(in srgb, var(--ink) 8%, transparent), color-mix(in srgb, var(--ink) 3%, transparent), color-mix(in srgb, var(--ink) 8%, transparent)); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+
+  /* ── the red strip: the one call to action on the overview ── */
+  .strip {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 12px 12px 24px;
+    border-radius: var(--r-tile); color: var(--on-dark);
+    background: linear-gradient(100deg, var(--night) 45%, var(--ember) 80%, var(--brand));
+    box-shadow: var(--shadow-card);
+  }
+  :root[data-theme='dark'] .strip { border: 1px solid var(--glass-line); }
+
+  /* ── motion: tiles rise once, bars grow, lines draw (the Hub v3 motion; off under reduced motion) ── */
+  .rise { animation: rise var(--dur-short) var(--ease-brand) both; }
+  .bar-grow { transform-origin: bottom; animation: grow 700ms var(--ease-brand) both; }
+  .draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 900ms 120ms var(--ease-brand) forwards; }
+}
+
+/* tiles move into place but are never transparent, so content shows even where animations do not run */
+@keyframes rise { from { transform: translateY(10px); } to { transform: none; } }
+@keyframes grow { from { transform: scaleY(0); } to { transform: none; } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes drawer-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ping { to { transform: scale(2.6); opacity: 0; } }
+
+@layer components {
+  /* a map callout: a small glass label above its bubble */
+  .callout { border-radius: 10px; border: 1px solid var(--glass-line); background: var(--glass-solid); box-shadow: var(--shadow-pop); }
+}

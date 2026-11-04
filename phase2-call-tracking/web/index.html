@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Ruler Calls</title>
+    <meta name="description" content="Phone calls from your campaigns, who to call back, and what each channel brings in." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='16' fill='%230e0e0e'/%3E%3Cpath d='M11 9h6.5a4.5 4.5 0 0 1 1.2 8.8L22 23h-3.4l-2.9-5H14v5h-3z' fill='%23fff'/%3E%3C/svg%3E" />
+    <script>
+      // The theme before first paint, so a dark-mode visitor never sees a white flash.
+      try {
+        var t = localStorage.getItem('ctc-theme');
+        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.theme = t;
+      } catch (e) { document.documentElement.dataset.theme = 'light'; }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Ruler Calls needs JavaScript switched on.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

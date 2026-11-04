@@ -19,3 +19,7 @@ Thumbs.db
 
 # Brainstorm mockups
 .superpowers/
+
+# Built web app (npm run build) and Hallmark run files
+phase2-call-tracking/web/dist/
+.hallmark/
