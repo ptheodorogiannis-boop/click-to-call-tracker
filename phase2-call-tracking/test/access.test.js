@@ -28,7 +28,7 @@ test('tokens: shown once, stored hashed, revocable, die with the user', () => {
   const { id, token } = users.createToken(people.member.id, 'Claude');
   assert.match(token, /^ct_[\w-]{32}$/);
   assert.equal(users.userForToken(token).id, people.member.id);
-  assert.equal(users.userForToken(token.slice(0, -1) + 'x'), null);
+  assert.equal(users.userForToken(token.slice(0, -1) + (token.endsWith('x') ? 'y' : 'x')), null);
   assert.ok(users.revokeToken(people.member.id, id));
   assert.equal(users.userForToken(token), null);
 

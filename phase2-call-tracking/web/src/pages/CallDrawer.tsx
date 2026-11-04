@@ -73,7 +73,12 @@ function CallBody({ call, onUpdate }: { call: Call; onUpdate: (c: Call) => void 
                 </button>
               ))}
             </div>
-            <p className="hint">{call.lead_status === 'new' ? (call.qualified ? 'Counts as a lead because it lasted long enough. Judging it overrides that.' : 'Not counted as a lead until it is judged or a call lasts long enough.') : 'Judged by your team; this overrides the duration rule.'}</p>
+            <p className="hint">
+              {call.lead_status === 'new'
+                ? (call.qualified ? 'Counts as a lead because it lasted long enough. Judging it changes that here' : 'Not counted as a lead until it is judged or a call lasts long enough')
+                : 'Judged by your team; this replaces the duration rule in CallTrack’s counts and reports'}
+              {(call.conv_google || call.conv_meta || call.conv_ga4) && '. Ad platforms received this call as a conversion when it ended, and that upload is not changed'}
+            </p>
             <ValueField call={call} busy={busy} onSave={(v) => act(() => api.patch(path, { value: v }), 'Value saved')} />
           </>
         ) : (

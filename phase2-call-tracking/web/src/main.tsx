@@ -1,4 +1,4 @@
-import { StrictMode, Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { Component, StrictMode, Suspense, lazy, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import '@fontsource-variable/manrope';
@@ -11,8 +11,27 @@ import Login from './pages/Login';
 import Overview from './pages/Overview';
 import Calls from './pages/Calls';
 import Clients from './pages/Clients';
-const Reports = lazy(() => import('./pages/Reports')); // carries the chart library
+// Reports carries the chart library, so it loads on demand. A deploy replaces its file, so a tab opened before the
+// deploy reloads once to pick up the new one instead of showing a broken page.
+const Reports = lazy(() => import('./pages/Reports')
+  .then((m) => { try { sessionStorage.removeItem('ctc-reloaded'); } catch { /* storage off */ } return m; })
+  .catch((e) => {
+    let reloaded = '1';
+    try { reloaded = sessionStorage.getItem('ctc-reloaded') || ''; sessionStorage.setItem('ctc-reloaded', '1'); } catch { /* storage off */ }
+    if (!reloaded) { window.location.reload(); return new Promise<never>(() => {}); }
+    throw e;
+  }));
 import Settings from './pages/Settings';
+
+// A page that fails to load shows what happened and a way back, instead of an empty screen.
+class PageBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return <div className="tile p-6"><ErrorState error={{ message: 'This page could not load. Reload to get the latest version.' }} retry={() => window.location.reload()} /></div>;
+  }
+}
 
 function App() {
   const [me, setMe] = useState<Me | null>(null);
@@ -38,7 +57,7 @@ function App() {
           <Route path="/" element={<Overview />} />
           <Route path="/calls" element={<Calls />} />
           {canEdit && <Route path="/clients" element={<Clients />} />}
-          <Route path="/reports" element={<Suspense fallback={<div className="skel h-[420px] rounded-tile" />}><Reports /></Suspense>} />
+          <Route path="/reports" element={<PageBoundary><Suspense fallback={<div className="skel h-[420px] rounded-tile" />}><Reports /></Suspense></PageBoundary>} />
           <Route path="/settings/*" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

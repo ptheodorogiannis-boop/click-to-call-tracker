@@ -337,15 +337,28 @@ function search(user, text) {
   };
 }
 
+// The whole period, no row cap (an export that silently stops is worse than none). Tags come in the same query.
 function toCsv(user, q = {}) {
-  const rows = listCalls(user, { ...q, limit: 500 }).calls;
+  if (q.client_id) scopedClient(user, q.client_id);
+  const w = where(user, {
+    client_id: q.client_id, since: isDate(q.since) ? q.since : null, until: isDate(q.until) ? q.until : null,
+    status: q.status, channel: q.channel, lead_status: q.lead_status, tag: q.tag, q: q.q
+  });
   const cols = ['started_at', 'client_name', 'caller', 'status', 'duration_sec', 'channel', 'utm_source', 'utm_medium',
     'utm_campaign', 'utm_term', 'landing_page', 'region_name', 'first_time', 'lead_status', 'is_lead', 'value_effective', 'tags'];
   const cell = (v) => {
     const t = Array.isArray(v) ? v.join('; ') : v == null ? '' : String(v);
     return /[",\n;]/.test(t) || /^[=+\-@]/.test(t) ? '"' + t.replace(/^([=+\-@])/, "'$1").replace(/"/g, '""') + '"' : t;
   };
-  return [cols.join(','), ...rows.map((r) => cols.map((c) => cell(r[c])).join(','))].join('\n');
+  const out = [cols.join(',')];
+  const stmt = db.prepare(`SELECT ${CALL_COLUMNS},
+      (SELECT GROUP_CONCAT(t.tag, '; ') FROM call_tags t WHERE t.call_sid = c.call_sid) tag_list
+    ${FROM} ${w.sql} ORDER BY c.started_at DESC`);
+  for (const r of stmt.all(...w.params)) {
+    shape(r, r.tag_list ? r.tag_list.split('; ') : []);
+    out.push(cols.map((c) => cell(r[c])).join(','));
+  }
+  return out.join('\n');
 }
 
 module.exports = {

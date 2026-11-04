@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { seed, start, session } = require('./helpers');
 const users = require('../src/users');
+const { db } = require('../src/db');
 
 const people = seed();
 let srv;
@@ -107,4 +108,26 @@ test('logins are braked after 10 failures', async () => {
   let last;
   for (let i = 0; i < 11; i++) last = await s.login('nobody', 'wrong-password');
   assert.equal(last.status, 429);
+});
+
+test('the brake counts each visitor behind the proxy apart, not the proxy', async () => {
+  const s = session(srv.base);
+  const from = (ip) => ({ 'X-Forwarded-For': ip });
+  let last;
+  for (let i = 0; i < 11; i++) last = await s.post('/api/v2/auth/login', { login: 'nobody', password: 'wrong-password' }, from('203.0.113.7'));
+  assert.equal(last.status, 429, 'the guessing address is braked');
+  const other = await s.post('/api/v2/auth/login', { login: 'nobody', password: 'wrong-password' }, from('198.51.100.20'));
+  assert.equal(other.status, 401, 'someone else is not');
+});
+
+test('CSV export has every call in the period, past 500', async () => {
+  const ins = db.prepare(`INSERT INTO calls (call_sid, client_id, tracking_number, caller, started_at, answered, status, channel)
+    VALUES (?, 'beta', '+302100000001', '+306970000000', datetime('now', '-2 days'), 1, 'answered', 'direct')`);
+  db.transaction(() => { for (let i = 0; i < 520; i++) ins.run('CSVBULK' + i); })();
+  const s = session(srv.base);
+  // its own address: the brake tests above have used up 127.0.0.1
+  await s.post('/api/v2/auth/login', { login: 'admin', password: 'admin-password-123' }, { 'X-Forwarded-For': '192.0.2.50' });
+  const csv = await s.get('/api/v2/reports/calls.csv?client_id=beta&days=30');
+  const lines = csv.body.trim().split(/\r?\n/).length - 1;
+  assert.ok(lines >= 522, `expected every row, got ${lines}`);
 });

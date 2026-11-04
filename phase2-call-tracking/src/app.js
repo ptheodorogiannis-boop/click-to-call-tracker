@@ -11,7 +11,9 @@ const owner = bootstrapOwner();
 if (owner) console.log(`created owner "${owner.login}" from ADMIN_USER / ADMIN_PASSWORD`);
 
 const app = express();
-app.set('trust proxy', 'loopback'); // behind Caddy: req.ip is the visitor, for the login brake
+// Behind Caddy (its own container on the private compose network), req.ip must be the visitor's address, or every
+// sign-in shares one brake. Trust the local hops by default; TRUST_PROXY overrides (e.g. a hop count behind a CDN).
+app.set('trust proxy', process.env.TRUST_PROXY || 'loopback, uniquelocal');
 
 // MCP parses its own JSON body (before the global parsers touch it).
 app.use('/mcp', require('./mcp'));
