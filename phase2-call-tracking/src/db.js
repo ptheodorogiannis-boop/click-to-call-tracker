@@ -11,7 +11,12 @@ const cfg = require('./config');
 const SCHEMA_VERSION = '2026-11-04.4'; // bump when schema.sql or ensureColumns changes
 
 function url() {
-  if (process.env.TURSO_DATABASE_URL) return process.env.TURSO_DATABASE_URL;
+  const turso = process.env.TURSO_DATABASE_URL;
+  if (turso) {
+    // libSQL echoes a bad URL in its error, and a token pasted here by mistake would land in the logs.
+    if (!/^(libsql|https?|wss?):\/\//.test(turso)) throw new Error('TURSO_DATABASE_URL must start with libsql:// (is the auth token in it by mistake?)');
+    return turso;
+  }
   const file = path.resolve(cfg.dbPath);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   return 'file:' + file.split(path.sep).join('/');

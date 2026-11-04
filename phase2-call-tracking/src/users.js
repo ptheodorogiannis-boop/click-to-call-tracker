@@ -30,7 +30,6 @@ const s = {
   byLogin: db.prepare('SELECT * FROM users WHERE login = ?'),
   list: db.prepare('SELECT id, login, name, role, active, created_at, last_login_at FROM users ORDER BY role, name'),
   count: db.prepare('SELECT COUNT(*) n FROM users'),
-  insert: db.prepare(SQL.insert),
   touchLogin: db.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?"),
   clientIds: db.prepare('SELECT client_id FROM user_clients WHERE user_id = ? ORDER BY client_id'),
   tokenInsert: db.prepare('INSERT INTO api_tokens (user_id, name, prefix, token_hash) VALUES (?, ?, ?, ?)'),
@@ -106,10 +105,11 @@ async function changePassword(userId, current, next) {
 }
 
 // Keeps existing deployments signing in: the first boot of v2 turns ADMIN_USER / ADMIN_PASSWORD into the owner.
+// Serverless cold starts can run this side by side; the loser's insert is ignored instead of failing its request.
 async function bootstrapOwner() {
   if ((await s.count.get()).n > 0 || !cfg.admin.password) return null;
-  const r = await s.insert.run({ login: cfg.admin.user, name: cfg.admin.user, password_hash: hashPassword(cfg.admin.password), role: 'owner' });
-  return getUser(r.lastInsertRowid);
+  const r = await db.prepare(SQL.insert.replace('INSERT', 'INSERT OR IGNORE')).run({ login: cfg.admin.user, name: cfg.admin.user, password_hash: hashPassword(cfg.admin.password), role: 'owner' });
+  return r.changes ? getUser(r.lastInsertRowid) : null;
 }
 
 // ── scope ──────────────────────────────────────────────

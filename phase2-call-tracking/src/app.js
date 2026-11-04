@@ -19,7 +19,7 @@ function boot() {
   return (booted ||= (async () => {
     await migrate();
     const owner = await bootstrapOwner();
-    if (owner) console.log(`created owner "${owner.login}" from ADMIN_USER / ADMIN_PASSWORD`);
+    if (owner) console.log('created the owner from ADMIN_USER / ADMIN_PASSWORD');
   })().catch((e) => { booted = null; throw e; }));
 }
 
