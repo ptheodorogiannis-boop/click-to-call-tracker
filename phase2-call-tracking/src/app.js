@@ -78,16 +78,25 @@ app.use(['/api', '/webhooks', '/mcp', '/static'], (req, res) => res.status(404).
 
 // The web app (web/dist, built by `npm run build`). Hashed assets cache for a year; every other path gets
 // index.html so client-side routes survive a reload. Auth is enforced by the API; the shell is public.
-// On Vercel the files are on its CDN (public/) and the page HTML comes bundled (src/generated/index-html.js).
+// On Vercel the page and its assets come bundled (src/generated/, see tools/vercel-prepare.js): the copy of web/dist
+// inside the function has had its ES modules rewritten to CommonJS, which a browser cannot run.
 const web = path.join(__dirname, '..', 'web', 'dist');
-let bundledHtml = null;
-try { bundledHtml = require('./generated/index-html'); } catch (e) { /* not a Vercel build */ }
-if (fs.existsSync(path.join(web, 'index.html'))) {
+let bundled = null;
+if (process.env.VERCEL) {
+  try { bundled = { html: require('./generated/index-html'), assets: require('./generated/web-assets') }; } catch (e) { /* no web build */ }
+}
+if (bundled) {
+  const assets = Object.fromEntries(Object.entries(bundled.assets).map(([name, a]) => [name, { type: a.type, body: Buffer.from(a.base64, 'base64') }]));
+  app.get('/assets/:name', (req, res, next) => {
+    const a = assets[req.params.name];
+    if (!a) return res.status(404).end();
+    res.set('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable').type(a.type).send(a.body);
+  });
+  app.get('*', (req, res) => res.set('Cache-Control', 'no-cache').type('html').send(bundled.html));
+} else if (fs.existsSync(path.join(web, 'index.html'))) {
   app.use('/assets', express.static(path.join(web, 'assets'), { immutable: true, maxAge: '1y' }));
   app.use(express.static(web, { index: false, maxAge: '1h' }));
   app.get('*', (req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(web, 'index.html')));
-} else if (bundledHtml) {
-  app.get('*', (req, res) => res.set('Cache-Control', 'no-cache').type('html').send(bundledHtml));
 } else {
   app.get('/', (req, res) => res.type('text').send('CallTrack API is running. Build the web app with `npm run build`.'));
 }
