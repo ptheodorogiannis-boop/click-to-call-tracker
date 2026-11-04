@@ -7,3 +7,6 @@ data
 .git
 npm-debug.log
 test/*.html
+web/dist
+.superpowers
+.hallmark

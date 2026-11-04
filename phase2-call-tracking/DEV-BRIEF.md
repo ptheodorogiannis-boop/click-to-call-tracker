@@ -6,21 +6,30 @@ Each client uses **their own Twilio credentials**, isolated per account.
 
 ---
 
+## v2 at a glance (2026-11-04)
+- **People and access:** owner, team member and client (read-only portal) logins; a client login sees only its own clients, enforced on the server. The `ADMIN_USER`/`ADMIN_PASSWORD` pair only creates the first owner on first boot.
+- **Lead work:** lead status (lead, customer, not a lead, spam), value per call, tags, notes and a call-back queue for missed calls; the region of landline callers from the Greek area code.
+- **MCP server** at `POST /mcp` (Streamable HTTP) for Claude, n8n and other tools, authenticated with personal `ct_` tokens made in Settings › API and MCP. Read tools for everyone; lead-level writes for team members. No access to Twilio or ad-platform secrets, numbers or deletion.
+- **New web app** (React + Vite + Tailwind, Ruler Hub glass design), built into `web/dist` by `npm run build` and served by the same Node process. The old `public/admin` UI and `/admin/api` are gone.
+- **Tests:** `npm test` (node:test, throwaway DB). **Demo:** `DB_PATH=./data/demo.db node tools/demo.js`, then `node tools/run-demo.js` (port 8099).
+
 ## 1. What it does
 - **DNI (dynamic number insertion):** swaps the phone number on a client's website per visitor, carrying the ad attribution (gclid/fbclid/utm).
 - **Call tracking:** answered/missed, duration, first-time vs repeat caller, recording + transcription (with a Greek GDPR consent announcement).
 - **Attribution → conversions:** pushes qualified calls to **Google Ads** (offline click conversion via gclid), **Meta CAPI** (Lead), and **GA4**.
-- **Branded admin UI:** add/manage clients (incl. their Twilio creds + conversion config + number pool) and view per-client reports (scorecards, channel breakdown, call log with recordings + transcripts).
+- **Web app:** overview of every client, the call log with recordings and transcripts, lead work, client settings (Twilio creds, conversion config, number pool, website code), reports, team and client logins, API tokens.
+- **MCP + REST:** `/mcp` for AI assistants and automation tools, `/api/report/*` for Looker Studio and scripts.
 
 ## 2. Architecture
 ```
 Browser snippet (dni-tracker.js) ──POST /api/dni/assign──► Node app ──► SQLite (data/calls.db)
 Twilio (per client) ──POST /webhooks/voice/*──► Node app  (signature checked w/ that client's token)
-Admin/staff ──► /  (branded SPA)  ──► /admin/api/*  (cookie-session auth)
+Team + clients ──► /  (web app, web/dist) ──► /api/v2/*  (cookie session, roles, client scope)
+Claude, n8n … ──► /mcp  (Bearer ct_ token, same scope)          Looker ──► /api/report/*  (key or token)
                                    └─► conversion push: Google Ads / Meta CAPI / GA4
 Caddy (reverse proxy) terminates HTTPS in front of the Node app.
 ```
-- **Stack:** Node ≥18, Express, better-sqlite3 (single-file DB), Twilio SDK, google-ads-api.
+- **Stack:** Node ≥20 (22 in Docker), Express, React + Vite (build time only), @modelcontextprotocol/sdk, better-sqlite3 (single-file DB), Twilio SDK, google-ads-api.
 - **No external DB/service** required. One container does it all; Caddy adds auto-HTTPS.
 
 ## 3. Prerequisites
@@ -62,7 +71,7 @@ ADMIN_PASSWORD=... SESSION_SECRET=... PUBLIC_BASE_URL=... npm start
 ```
 
 ## 5. First-run configuration (via the UI)
-1. Go to `https://<your-domain>/` → sign in with `ADMIN_USER` / `ADMIN_PASSWORD`.
+1. Go to `https://<your-domain>/` → sign in with `ADMIN_USER` / `ADMIN_PASSWORD` (the first owner). Add your team, and later client logins, in **Settings › Team and client logins**.
 2. **New client** → fill:
    - **Basics:** client id (slug), name, forward-to number (their real line), lead value, qualified-after seconds, recording on/off, Greek consent text.
    - **Twilio:** that client's **Account SID + Auth Token**.
@@ -82,7 +91,7 @@ Offline click-conversion upload needs agency-level OAuth. Set in `.env`:
 ## 7. Verify the pipeline
 ```bash
 # fake the whole flow without real telephony (set VALIDATE_TWILIO_SIGNATURE=false first):
-docker compose exec app sh -c "VALIDATE_TWILIO_SIGNATURE=false BASE=http://localhost:8080 node test/simulate.js"
+docker compose exec app sh -c "VALIDATE_TWILIO_SIGNATURE=false BASE=http://localhost:8080 REPORT_API_KEY=$REPORT_API_KEY node test/simulate.js"
 # → ✓ PASS — full attribution → call → qualify path works
 ```
 Then place a real test call to a tracking number and confirm it appears in the UI report with duration, status, and a playable recording.
@@ -91,7 +100,9 @@ Then place a real test call to a tracking number and confirm it appears in the U
 - Admin UI is protected by a signed-cookie session (`SESSION_SECRET`); cookies are `HttpOnly`, `SameSite=Lax`, `Secure` under HTTPS.
 - Every Twilio webhook is validated against **that client's** auth token (`X-Twilio-Signature`). Keep `VALIDATE_TWILIO_SIGNATURE=true` in production.
 - Recordings are streamed through the app using the client's Twilio creds (browsers never get the token).
-- Optionally set `REPORT_API_KEY` to require `X-Api-Key` on the read-only `/api/report/*` JSON endpoints (used for Looker/Metabase).
+- `/api/report/*` is never open: it needs `REPORT_API_KEY` (as `X-Api-Key`, sees every client) or a personal `ct_` token (sees that user's clients).
+- Passwords are scrypt-hashed; API tokens are stored as SHA-256 and shown once; sign-in is braked after 10 failures per address per 15 minutes.
+- Every read in the web app, the report API and MCP goes through `src/calls.js`, which filters by the user's clients. A client login cannot see another client's calls, recordings or transcripts (covered by `npm test`).
 
 ## 9. GDPR (Greece)
 Recording requires informing callers. The app plays a Greek announcement before connecting
@@ -102,7 +113,7 @@ Transcripts are personal data — agree retention with each client. Have clients
 - **Backup:** the DB is one file — `cp data/calls.db` off-box on a cron (it's the whole dataset).
 - **Update:** pull/scp new code → `docker compose up -d --build`.
 - **Logs:** `docker compose logs -f app`.
-- **Re-skin/rename:** edit the 6 brand variables at the top of `public/admin/styles.css` and `BRAND_NAME` in `.env`.
+- **Re-skin/rename:** the design tokens are at the top of `web/src/styles.css` (rebuild with `npm run build`); `BRAND_NAME` / `BRAND_COMPANY` in `.env`.
 
 ## 11. Cost
 - Server + HTTPS: €0 (Oracle Always Free + Caddy/Let's Encrypt) or ~€4/mo (Hetzner).

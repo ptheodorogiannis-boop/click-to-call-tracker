@@ -8,9 +8,10 @@ runs as one Node service on your VPS.
 > This is the upgrade from Phase 1 (click tracking). Phase 1's click data still complements
 > this; Phase 2 tracks the **actual phone call**.
 
-**Finalized as a self-hosted product:** branded web UI ("Ruler CallTrack"), multi-client with
-**per-client Twilio credentials**, login-protected admin, and per-client reports with recordings
-+ transcripts. To install on a server, follow **[DEV-BRIEF.md](DEV-BRIEF.md)** (or `DEPLOY.md`
+**v2 (2026-11-04):** a new web app in the Ruler Hub glass design, team and client logins with
+server-side client scope, lead work (status, value, tags, notes, call-back queue) and an **MCP
+server** so Claude and other tools can read calls and work leads. Multi-client with **per-client
+Twilio credentials**. To install on a server, follow **[DEV-BRIEF.md](DEV-BRIEF.md)** (or `DEPLOY.md`
 for the free-VM walkthrough). Manage everything at `https://<your-domain>/` after login.
 
 ## How it works
@@ -46,6 +47,7 @@ cp .env.example .env          # fill Twilio + (optional) Google Ads / OpenAI
 npm install
 npm run migrate
 npm run seed                  # demo client + pool — edit tools/seed.js for real values
+npm run build                 # the web app → web/dist
 npm start                     # listens on :8080
 ```
 Put it behind HTTPS (Caddy/Nginx) and set `PUBLIC_BASE_URL` to the public URL — Twilio must
@@ -86,20 +88,46 @@ concurrent ad visitors**, not total traffic. If the pool exhausts, the server re
 oldest-reserved number (`fallback:true`) — attribution still logs but could be shared. Start with
 5–10 numbers per busy client and watch for `fallback` in the `ctc_dni_assigned` dataLayer event.
 
-## Reporting
-- `GET /api/report/stats?client=client-acme&since=2026-06-01` → per-channel totals (calls,
-  answered, missed, qualified, first-time).
-- `GET /api/report/calls?client=client-acme` → call rows with attribution + recording + transcript.
-- Point Looker Studio / Metabase at the SQLite DB (or sync to a sheet) for client dashboards.
-- Set `REPORT_API_KEY` in `.env` to require `X-Api-Key` on these endpoints.
+## Web app, people and MCP
+`npm run build` builds the web app (`web/`, React + Vite + Tailwind) into `web/dist`; `npm start` serves it at `/`.
 
-## Local test without telephony
-With the server running: `npm run simulate`. It requests a DNI number, fakes the Twilio
+| Role | Sees | Can change |
+|---|---|---|
+| Owner | every client | everything, plus team and client logins |
+| Team member | every client | lead status, value, tags, notes, called back; clients, numbers, conversions |
+| Client | only the clients on their login | nothing (read-only portal) |
+
+The first owner comes from `ADMIN_USER` / `ADMIN_PASSWORD` on first boot. Every read goes through
+`src/calls.js`, which filters by the user's clients.
+
+**MCP.** `POST /mcp` speaks the Model Context Protocol over Streamable HTTP (stateless). Make a
+personal token in **Settings › API and MCP** and send it as `Authorization: Bearer ct_…`. Tools:
+`whoami`, `list_clients`, `get_overview`, `get_report`, `list_calls`, `search_calls`, `get_call`,
+`calls_to_call_back`, and for team members `set_lead_status`, `tag_call`, `add_note`,
+`mark_called_back`. Claude Code: `claude mcp add --transport http ruler-calls https://YOUR_BASE/mcp --header "Authorization: Bearer ct_…"`.
+
+## Reporting API
+- `GET /api/report/stats?client=client-acme&since=2026-06-01` → per-channel totals.
+- `GET /api/report/calls?client=client-acme` → call rows with attribution.
+- Never open: send `REPORT_API_KEY` as `X-Api-Key` (every client) or a personal token as
+  `Authorization: Bearer ct_…` (that user's clients).
+- `GET /api/v2/reports/calls.csv` (signed in) exports the call log.
+
+## Tests and local runs
+- `npm test`: access rules, client scope, lead work, the report API and MCP (through the SDK's own
+  client), on a throwaway database.
+- Demo data: `DB_PATH=./data/demo.db node tools/demo.js`, then `node tools/run-demo.js` → http://localhost:8099,
+  sign in as `admin` / `demo-password-1` (or `lyra@client.demo` for the client view).
+- Web app with hot reload: `node tools/run-demo.js` and `npm run dev:web` (port 5173, proxies the API).
+
+### Without telephony
+With the server running: `npm run simulate` (with `REPORT_API_KEY` set). It requests a DNI number, fakes the Twilio
 incoming/dial/recording webhooks for a 42s answered call from a Google click, then asserts the
 call is logged as `channel=google_ads`, `gclid` preserved, `qualified=1`, `first_time=1`.
 (Set `VALIDATE_TWILIO_SIGNATURE=false` in `.env` for the simulation.)
 
 ## Status / honesty
-- This backend has **not been executed in the build environment** (no Node runtime there). The
-  code is written to run on Node ≥18; validate locally with `npm run simulate` before going live.
-- The browser DNI swapper (`public/dni-tracker.js`) **was** verified in a real browser.
+- Since 2026-11-04 the backend runs locally on Node 24: `npm test` (24 tests) and `npm run simulate`
+  pass. It has **not** taken a real Twilio call yet; place a test call after deploying.
+- Google Ads / Meta / GA4 uploads are untested against the live APIs.
+- The browser DNI swapper (`public/dni-tracker.js`) was verified in a real browser.
