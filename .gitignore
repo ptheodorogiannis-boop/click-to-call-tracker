@@ -16,3 +16,6 @@ phase2-call-tracking/data/
 *.log
 .DS_Store
 Thumbs.db
+
+# Brainstorm mockups
+.superpowers/
