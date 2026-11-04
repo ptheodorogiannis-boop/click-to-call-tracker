@@ -5,7 +5,7 @@
   "type": "commonjs",
   "main": "src/server.js",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "scripts": {
     "start": "node src/server.js",
@@ -21,7 +21,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "better-sqlite3": "^11.3.0",
+    "better-sqlite3": "^12.11.1",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "google-ads-api": "^17.1.0",
