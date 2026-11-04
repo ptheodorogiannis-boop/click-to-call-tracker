@@ -40,6 +40,11 @@ gets a true offline conversion it can optimize bidding on (not just channel-leve
 Cost is more numbers; see pool sizing below.
 
 ## Setup
+> **Host it on a server that stays up (a VPS with Docker, see DEPLOY.md), not on Vercel or another serverless host.**
+> CallTrack keeps a SQLite file, answers Twilio webhooks that depend on it and sends scheduled reports from a timer;
+> serverless functions have no lasting disk and no running process. `vercel.json` turns off Vercel's Git deployments
+> for this repository for that reason.
+
 ### 1. Server
 ```bash
 cd phase2-call-tracking
