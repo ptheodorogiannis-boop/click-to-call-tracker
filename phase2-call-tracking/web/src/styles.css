@@ -3,6 +3,7 @@
  * redesign: full (keeps every API route and action of the v1 admin) · signature: the red strip and the queue it opens · v2.0.0 */
 /* Hallmark · answered F5 · 40 px glass circles are the icon buttons of the locked Ruler Hub system, drawn in ink, never tinted */
 /* Hallmark · answered F7 · navigation, segmented controls and buttons are pills in the locked system; tiles keep the 24 px tile radius */
+/* Hallmark · dismissed 70 · the "Test sent" toast in ClientEditor.tsx follows an awaited POST to /alerts/test, and the webhook subtitle in Settings.tsx describes the feature · neither is a success state without a request */
 /* Hallmark · answered F24 · overlays (menus, the call drawer, the search dialog) are the one place glass keeps its blur */
 @tailwind base;
 @tailwind components;

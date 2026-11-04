@@ -13,6 +13,12 @@ Each client uses **their own Twilio credentials**, isolated per account.
 - **New web app** (React + Vite + Tailwind, Ruler Hub glass design), built into `web/dist` by `npm run build` and served by the same Node process. The old `public/admin` UI and `/admin/api` are gone.
 - **Tests:** `npm test` (node:test, throwaway DB). **Demo:** `DB_PATH=./data/demo.db node tools/demo.js`, then `node tools/run-demo.js` (port 8099).
 
+## Wave 2 (2026-11-04)
+Block list, fixed source numbers, missed-call alerts (Slack, email), scheduled email reports, outbound webhooks,
+AI call summaries (Claude), health flags, password change and reset. New optional `.env` values: `SMTP_*`,
+`MAIL_FROM`, `ANTHROPIC_API_KEY`, `AI_MODEL`, `TRUST_PROXY` (see `.env.example`). Reports are sent by the app
+itself every 15 minutes when due; nothing extra to schedule.
+
 ## 1. What it does
 - **DNI (dynamic number insertion):** swaps the phone number on a client's website per visitor, carrying the ad attribution (gclid/fbclid/utm).
 - **Call tracking:** answered/missed, duration, first-time vs repeat caller, recording + transcription (with a Greek GDPR consent announcement).

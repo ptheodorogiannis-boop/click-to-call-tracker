@@ -5,7 +5,10 @@ export type LeadStatus = 'new' | 'good' | 'not_lead' | 'customer' | 'spam';
 
 export interface User { id: number; login: string; name: string; role: Role; active: boolean; client_ids: string[] | null; created_at?: string; last_login_at?: string | null }
 export interface ClientRef { id: string; name: string; active: boolean; currency: string }
-export interface Me { user: User; brand: { name: string; company: string }; public_base_url: string; clients: ClientRef[]; lead_statuses: LeadStatus[] }
+export interface Me {
+  user: User; brand: { name: string; company: string }; public_base_url: string; clients: ClientRef[]; lead_statuses: LeadStatus[];
+  fixed_sources: Record<string, string>; features: { ai: boolean; email: boolean };
+}
 
 export interface Range { since: string; until: string; days: number; prev_since: string; prev_until: string }
 export interface Totals { calls: number; answered: number; missed: number; leads: number; first_time: number; value: number; avg_duration: number; answer_rate: number | null }
@@ -36,6 +39,7 @@ export interface Call {
   value_effective: number; is_lead: boolean; to_call_back: boolean; called_back_at: string | null;
   conv_google: string | null; conv_meta: string | null; conv_ga4: string | null;
   has_recording: boolean; has_transcript: boolean; tags: string[];
+  ai_summary: string | null; ai_label: 'good' | 'not_lead' | 'spam' | null; ai_score: number | null;
   transcript?: string | null; notes?: { id: number; body: string; created_at: string; author: string | null }[];
 }
 export interface CallList { total: number; limit: number; offset: number; calls: Call[] }
@@ -43,15 +47,19 @@ export interface ClientEditor {
   client: {
     id: string; name: string; forward_number: string; active: boolean; recording_enabled: boolean; qualified_duration_sec: number | null;
     lead_value: number; currency: string; consent_message: string | null; twilio_account_sid: string; twilio_auth_token_masked: string;
+    alert_missed: boolean; alert_emails: string; alert_slack_url_masked: string;
+    report_schedule: 'off' | 'weekly' | 'monthly'; report_emails: string; report_next_at: string | null;
     config: {
       googleAds: { customerId?: string; conversionActionId?: string };
       meta: { pixelId: string; capiToken_masked: string; testEventCode: string };
       ga4: { measurementId: string; apiSecret_masked: string };
     };
   };
-  numbers: { phone: string; client_id: string; label: string | null; active: number; created_at: string }[];
+  numbers: { phone: string; client_id: string; label: string | null; active: number; created_at: string; kind: 'pool' | 'fixed'; source: string | null }[];
   portal_users: { id: number; login: string; name: string; active: number }[];
 }
+export interface Blocked { pattern: string; note: string | null; created_at: string; blocked_calls: number }
+export interface Webhook { id: number; client_id: string | null; url: string; events: string[]; active: boolean; created_at: string; last_status: string | null; last_at: string | null; failures: number }
 export interface Token { id: number; name: string; prefix: string; created_at: string; last_used_at: string | null }
 
 export class ApiError extends Error {

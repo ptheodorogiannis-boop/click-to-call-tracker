@@ -8,7 +8,10 @@ import { Empty, ErrorState, Loading, PageHead, Tile } from '../components/ui';
 import { Sparkline } from '../components/charts';
 import ClientEditor from './ClientEditor';
 
-const FLAG: Record<string, string> = { answer_rate: 'Low answer rate', call_back: 'Calls to call back', calls_down: 'Calls down' };
+const FLAG: Record<string, string> = {
+  answer_rate: 'Low answer rate', call_back: 'Calls to call back', calls_down: 'Calls down',
+  pool_full: 'Pool ran out', uploads_failing: 'Uploads failing', silent: 'No calls for a week'
+};
 
 // Every client as a row with its trend, the ones that need the agency first (the Ruler Reports overview pattern).
 export default function Clients() {
@@ -59,7 +62,7 @@ export default function Clients() {
                     <td className={`r num ${r.numbers ? '' : 'text-down'}`}>{r.numbers || 'None'}</td>
                     <td><Sparkline values={r.trend} height={22} accent={r.flags.includes('calls_down')} label={`${r.name}, calls per day`} /></td>
                     <td className="whitespace-nowrap">
-                      {r.flags.length ? r.flags.map((f) => <span key={f} className={`chip mr-1 ${f === 'call_back' ? 'chip-warn' : ''}`}>{FLAG[f]}</span>) : <span className="text-ink-3">Nothing</span>}
+                      {r.flags.length ? r.flags.map((f) => <span key={f} className={`chip mr-1 ${f === 'calls_down' || f === 'answer_rate' ? '' : 'chip-warn'}`}>{FLAG[f]}</span>) : <span className="text-ink-3">Nothing</span>}
                     </td>
                   </tr>
                 ))}

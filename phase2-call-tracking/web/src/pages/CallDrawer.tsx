@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Check, PhoneCall, Plus, X } from 'lucide-react';
+import { Ban, Check, PhoneCall, Plus, Sparkles, X } from 'lucide-react';
 import { api, type Call, type LeadStatus } from '../lib/api';
 import { useLoad, useSession, useToast } from '../lib/hooks';
 import { LEAD_LABEL, ago, channel, duration, money, phone, when } from '../lib/format';
@@ -21,7 +21,7 @@ export default function CallDrawer({ sid, onClose, onChanged }: { sid: string | 
 }
 
 function CallBody({ call, onUpdate }: { call: Call; onUpdate: (c: Call) => void }) {
-  const { canEdit } = useSession();
+  const { canEdit, me } = useSession();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const act = async (fn: () => Promise<{ call: Call }>, ok?: string) => {
@@ -61,6 +61,30 @@ function CallBody({ call, onUpdate }: { call: Call; onUpdate: (c: Call) => void 
             onClick={() => act(() => api.post(`${path}/called-back`, { done: false }), 'Back on the call-back list')}>Undo called back</button>
         )}
       </section>
+
+      {(call.ai_summary || (canEdit && call.has_transcript && me.features.ai)) && (
+        <Section title="AI read of the call">
+          {call.ai_summary ? (
+            <div className="rounded-[14px] bg-paper px-4 py-3">
+              <p className="text-[14px] leading-relaxed">{call.ai_summary}</p>
+              <p className="mt-2 text-[12px] text-ink-3 num">
+                Suggests {LEAD_LABEL[call.ai_label || 'new'].toLowerCase()}{call.ai_score != null ? `, ${call.ai_score} out of 100` : ''}
+              </p>
+              {canEdit && call.ai_label && call.ai_label !== call.lead_status && (
+                <button className="btn btn-glass btn-sm mt-3" disabled={busy}
+                  onClick={() => act(() => api.patch(path, { lead_status: call.ai_label }), `Marked as ${LEAD_LABEL[call.ai_label!].toLowerCase()}`)}>
+                  Use this suggestion
+                </button>
+              )}
+            </div>
+          ) : (
+            <button className="btn btn-glass" disabled={busy} onClick={() => act(() => api.post(`${path}/summarize`), 'Summary written')}>
+              <Sparkles /> Summarise the call
+            </button>
+          )}
+          <p className="hint">Written by Claude from the transcript. A suggestion: the lead status changes only when someone on the team chooses it</p>
+        </Section>
+      )}
 
       <Section title="Lead">
         {canEdit ? (
@@ -122,6 +146,17 @@ function CallBody({ call, onUpdate }: { call: Call; onUpdate: (c: Call) => void 
         <Section title="Transcript">
           <p className="whitespace-pre-wrap text-[14px] leading-relaxed text-ink-2">{call.transcript}</p>
         </Section>
+      )}
+
+      {canEdit && call.caller && call.status !== 'blocked' && (
+        <section className="border-t border-line pt-5">
+          <button className="btn btn-danger" disabled={busy}
+            onClick={() => window.confirm(`Block ${phone(call.caller)} for ${call.client_name}? Their calls will be turned away and never forwarded.`)
+              && act(() => api.post(`${path}/block`), 'Caller blocked')}>
+            <Ban /> Block this caller
+          </button>
+          <p className="hint">Unblock in the client’s settings, under Blocked numbers</p>
+        </section>
       )}
     </div>
   );

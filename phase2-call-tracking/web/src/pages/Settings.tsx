@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, NavLink, Route, Routes } from 'react-router-dom';
-import { Copy, Trash2 } from 'lucide-react';
-import { api, type ClientEditor as EditorData, type Token, type User } from '../lib/api';
+import { Copy, Send, Trash2 } from 'lucide-react';
+import { api, type ClientEditor as EditorData, type Token, type User, type Webhook } from '../lib/api';
 import { useLoad, useSession, useThemeMode, useToast } from '../lib/hooks';
 import { ago } from '../lib/format';
 import { Empty, ErrorState, Field, Loading, PageHead, Tile, TileHead } from '../components/ui';
@@ -11,7 +11,7 @@ export default function Settings() {
   const { isOwner, canEdit } = useSession();
   const tabs = [
     { to: '/settings', label: 'Account', end: true },
-    { to: '/settings/api', label: 'API and MCP' },
+    { to: '/settings/api', label: 'API, MCP and webhooks' },
     ...(canEdit ? [{ to: '/settings/install', label: 'Website code' }] : []),
     ...(isOwner ? [{ to: '/settings/team', label: 'Team and client logins' }] : [])
   ];
@@ -44,8 +44,8 @@ function Account() {
           <dt className="text-ink-3">Role</dt><dd>{{ owner: 'Owner: everything, including team and client logins', member: 'Team member: calls, leads and clients', client: 'Client: your calls and reports, read only' }[me.user.role]}</dd>
           <dt className="text-ink-3">Clients</dt><dd>{me.clients.map((k) => k.name).join(', ') || 'None yet'}</dd>
         </dl>
-        <p className="mt-4 text-[13px] text-ink-2">To change your password, ask the owner of this workspace</p>
       </Tile>
+      <PasswordTile />
       <Tile className="p-5">
         <TileHead title="Look" />
         <div className="seg" role="group" aria-label="Theme">
@@ -149,6 +149,7 @@ function ApiAccess() {
           <p className="text-ink-2">Tools: whoami, list_clients, get_overview, get_report, list_calls, search_calls, get_call, calls_to_call_back{canEdit ? ', set_lead_status, tag_call, add_note, mark_called_back' : ''}.</p>
         </div>
       </Tile>
+      {canEdit && <Webhooks />}
     </div>
   );
 }
@@ -182,6 +183,13 @@ function Team() {
   const [form, setForm] = useState({ name: '', login: '', password: '', role: 'member' as User['role'], client_ids: [] as string[] });
   const [busy, setBusy] = useState(false);
   const clientName = (id: string) => me.clients.find((k) => k.id === id)?.name || id;
+  const [newPassword, setNewPassword] = useState<{ name: string; password: string } | null>(null);
+  const resetPassword = async (u: User) => {
+    if (!window.confirm(`Give ${u.name} a new password? The old one stops working.`)) return;
+    const password = makePassword();
+    try { await api.patch(`/users/${u.id}`, { password }); setNewPassword({ name: u.name, password }); }
+    catch (err) { toast((err as Error).message, 'error'); }
+  };
 
   const add = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true);
@@ -200,6 +208,12 @@ function Team() {
     <div className="grid gap-3.5 xl:grid-cols-12">
       <Tile className="p-5 xl:col-span-7">
         <TileHead title="People who can sign in" />
+        {newPassword && (
+          <div className="mb-4 rounded-[14px] bg-paper p-4 text-[13px]" role="status">
+            <p className="font-medium">New password for {newPassword.name}. Send it to them now; it is not shown again</p>
+            <div className="mt-2"><CodeBlock code={newPassword.password} label="the new password" /></div>
+          </div>
+        )}
         {error ? <ErrorState error={error} retry={reload} /> : !data ? <Loading rows={5} /> : (
           <div className="overflow-x-auto">
             <table className="table min-w-[560px]">
@@ -217,7 +231,12 @@ function Team() {
                     <td className="max-w-[180px] truncate text-ink-2">{u.role === 'client' ? (u.client_ids || []).map(clientName).join(', ') || 'No client yet' : 'Every client'}</td>
                     <td className="text-ink-2">{u.last_login_at ? ago(u.last_login_at) : 'Never'}</td>
                     <td className="r">
-                      {u.id !== me.user.id && <button className="btn btn-glass btn-sm" onClick={() => update(u, { active: !u.active })}>{u.active ? 'Switch off' : 'Switch on'}</button>}
+                      {u.id !== me.user.id && (
+                        <span className="flex justify-end gap-2">
+                          <button className="btn btn-glass btn-sm" onClick={() => resetPassword(u)}>Reset password</button>
+                          <button className="btn btn-glass btn-sm" onClick={() => update(u, { active: !u.active })}>{u.active ? 'Switch off' : 'Switch on'}</button>
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -257,5 +276,121 @@ function Team() {
         </form>
       </Tile>
     </div>
+  );
+}
+
+// A password someone can type: 14 characters without look-alikes (0/O, 1/l/I).
+function makePassword() {
+  const a = new Uint8Array(14);
+  crypto.getRandomValues(a);
+  return Array.from(a, (b) => 'abcdefghjkmnpqrstuvwxyzACDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 55]).join('');
+}
+
+function PasswordTile() {
+  const toast = useToast();
+  const [f, setF] = useState({ current: '', next: '', again: '' });
+  const [busy, setBusy] = useState(false);
+  const mismatch = f.again.length > 0 && f.next !== f.again;
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (mismatch) return;
+    setBusy(true);
+    try { await api.post('/me/password', { current: f.current, next: f.next }); toast('Password changed'); setF({ current: '', next: '', again: '' }); }
+    catch (err) { toast((err as Error).message, 'error'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Tile className="p-5">
+      <TileHead title="Password" />
+      <form className="space-y-4" onSubmit={submit}>
+        <Field label="Current password" htmlFor="pw-cur"><input id="pw-cur" className="input" type="password" autoComplete="current-password" required value={f.current} onChange={(e) => setF({ ...f, current: e.target.value })} /></Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="New password" htmlFor="pw-new" hint="At least 10 characters"><input id="pw-new" className="input" type="password" autoComplete="new-password" required minLength={10} value={f.next} onChange={(e) => setF({ ...f, next: e.target.value })} /></Field>
+          <Field label="New password again" htmlFor="pw-again" hint={mismatch ? 'The two do not match' : undefined}><input id="pw-again" className="input" type="password" autoComplete="new-password" required aria-invalid={mismatch} value={f.again} onChange={(e) => setF({ ...f, again: e.target.value })} /></Field>
+        </div>
+        <button className="btn" disabled={busy || mismatch}>Change password</button>
+      </form>
+    </Tile>
+  );
+}
+
+const EVENT_LABEL: Record<string, string> = { 'call.completed': 'A call ends', 'call.updated': 'Someone works a lead' };
+
+function Webhooks() {
+  const { me } = useSession();
+  const toast = useToast();
+  const { data, error, reload } = useLoad<{ webhooks: Webhook[] }>('/webhooks');
+  const [f, setF] = useState({ url: '', client_id: '', events: ['call.completed', 'call.updated'] });
+  const [secret, setSecret] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const add = async (e: FormEvent) => {
+    e.preventDefault(); setBusy(true);
+    try {
+      const r = await api.post<{ secret: string }>('/webhooks', { ...f, client_id: f.client_id || null });
+      setSecret(r.secret); setF({ url: '', client_id: '', events: ['call.completed', 'call.updated'] }); reload();
+    } catch (err) { toast((err as Error).message, 'error'); }
+    finally { setBusy(false); }
+  };
+  const test = async (w: Webhook) => {
+    try { await api.post(`/webhooks/${w.id}/test`); toast('Delivered'); }
+    catch (err) { toast((err as Error).message === 'There is no call to send yet' ? 'There is no call to send yet' : 'The address did not accept it', 'error'); }
+    reload();
+  };
+  const remove = async (w: Webhook) => {
+    if (!window.confirm(`Stop sending calls to ${w.url}?`)) return;
+    await api.del(`/webhooks/${w.id}`).then(() => { toast('Webhook removed'); reload(); }, (err) => toast(err.message, 'error'));
+  };
+  return (
+    <Tile className="p-5 xl:col-span-12">
+      <TileHead title="Webhooks" sub="Each call is sent as JSON to your address when it ends and when someone works it" />
+      {error ? <ErrorState error={error} retry={reload} /> : !data ? <Loading rows={2} /> : data.webhooks.length > 0 && (
+        <div className="mb-5 overflow-x-auto">
+          <table className="table min-w-[640px]">
+            <thead><tr><th>Address</th><th>Client</th><th>Sends when</th><th>Last delivery</th><th /></tr></thead>
+            <tbody>
+              {data.webhooks.map((w) => (
+                <tr key={w.id}>
+                  <td className="max-w-[260px] truncate"><code className="text-[12px]">{w.url}</code></td>
+                  <td>{w.client_id ? me.clients.find((k) => k.id === w.client_id)?.name || w.client_id : 'Every client'}</td>
+                  <td className="text-ink-2">{w.events.map((e) => EVENT_LABEL[e] || e).join(', ')}</td>
+                  <td>{w.last_at ? <span className={w.failures ? 'text-down' : 'text-ink-2'}>{w.last_status}, {ago(w.last_at)}</span> : <span className="text-ink-3">Never</span>}</td>
+                  <td className="r">
+                    <span className="flex justify-end gap-2">
+                      <button className="btn btn-glass btn-sm" onClick={() => test(w)}><Send /> Test</button>
+                      <button className="icon-btn icon-btn-sm" onClick={() => remove(w)} aria-label={`Remove the webhook to ${w.url}`}><Trash2 /></button>
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {secret && (
+        <div className="mb-5 rounded-[14px] bg-paper p-4" role="status">
+          <p className="text-[13px] font-medium">Signing secret. Copy it now; it is not shown again</p>
+          <p className="mt-1 text-[12px] text-ink-2">Each request carries X-CallTrack-Signature: t=time,v1=HMAC-SHA256 of “time.body” with this secret</p>
+          <div className="mt-2"><CodeBlock code={secret} label="the signing secret" /></div>
+        </div>
+      )}
+      <form className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto] lg:items-end" onSubmit={add}>
+        <Field label="Send to" htmlFor="wh-url"><input id="wh-url" className="input" type="url" required placeholder="https://hooks.zapier.com/… or your own address" value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} /></Field>
+        <Field label="For" htmlFor="wh-client">
+          <select id="wh-client" className="select" value={f.client_id} onChange={(e) => setF({ ...f, client_id: e.target.value })}>
+            <option value="">Every client</option>
+            {me.clients.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+          </select>
+        </Field>
+        <button className="btn" disabled={busy || !f.events.length}>Add webhook</button>
+        <fieldset className="flex flex-wrap gap-4 lg:col-span-3">
+          <legend className="sr-only">Send when</legend>
+          {Object.entries(EVENT_LABEL).map(([k, v]) => (
+            <label key={k} className="check">
+              <input type="checkbox" checked={f.events.includes(k)} onChange={(e) => setF({ ...f, events: e.target.checked ? [...f.events, k] : f.events.filter((x) => x !== k) })} /> {v}
+            </label>
+          ))}
+        </fieldset>
+      </form>
+    </Tile>
   );
 }

@@ -55,11 +55,14 @@ export function phone(e164: string | null | undefined) {
 
 export const CHANNELS: Record<string, string> = {
   google_ads: 'Google Ads', meta_ads: 'Meta Ads', microsoft_ads: 'Microsoft Ads', other_paid: 'Other paid',
-  google_organic: 'Google search', meta_organic: 'Facebook and Instagram', referral: 'Referral', direct: 'Direct'
+  google_organic: 'Google search', meta_organic: 'Facebook and Instagram', referral: 'Referral', direct: 'Direct',
+  // fixed numbers (src/sources.js)
+  google_business: 'Google Business Profile', print: 'Print', radio: 'Radio', tv: 'TV', outdoor: 'Outdoor',
+  partner: 'Partner or directory', offline_other: 'Other offline'
 };
 export const channel = (c: string | null | undefined) => CHANNELS[c || 'direct'] || c || 'Direct';
 // Short names for chart labels, where a column is narrow.
-const SHORT: Record<string, string> = { google_ads: 'Google Ads', meta_ads: 'Meta Ads', microsoft_ads: 'Microsoft', other_paid: 'Other paid', google_organic: 'Search', meta_organic: 'Social', referral: 'Referral', direct: 'Direct' };
+const SHORT: Record<string, string> = { google_ads: 'Google Ads', meta_ads: 'Meta Ads', microsoft_ads: 'Microsoft', other_paid: 'Other paid', google_organic: 'Search', meta_organic: 'Social', referral: 'Referral', direct: 'Direct', google_business: 'Google listing', print: 'Print', radio: 'Radio', tv: 'TV', outdoor: 'Outdoor', partner: 'Partner', offline_other: 'Offline' };
 export const channelShort = (c: string | null | undefined) => SHORT[c || 'direct'] || c || 'Direct';
 
 export const LEAD_LABEL: Record<string, string> = { new: 'Not judged', good: 'Lead', not_lead: 'Not a lead', customer: 'Customer', spam: 'Spam' };

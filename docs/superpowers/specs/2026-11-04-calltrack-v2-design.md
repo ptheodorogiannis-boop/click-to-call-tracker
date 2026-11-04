@@ -129,6 +129,10 @@ Source: `docs/research/2026-11-04-competitor-features.md` (top 15, ranked). Wave
 roles (#3), tags, notes, lead status and value (#4, without pushing the value to ad platforms), CSV export (part of
 #7) and the MCP server (#11).
 
+**Status 2026-11-04:** the user chose all four groups; everything below is built and tested except value restatement,
+keyword from gclid, call flows and GDPR retention. Alerts use Slack and email (no channel was named); scheduled reports
+are HTML email with the CSV attached (no PDF yet).
+
 **Can be built and verified on this machine** (no outside accounts):
 
 | Feature | Research rank | Shape |

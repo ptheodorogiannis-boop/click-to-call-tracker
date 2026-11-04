@@ -12,7 +12,8 @@ const STATUS = [
   { v: '', label: 'All' },
   { v: 'missed', label: 'Missed' },
   { v: 'to_call_back', label: 'To call back' },
-  { v: 'answered', label: 'Answered' }
+  { v: 'answered', label: 'Answered' },
+  { v: 'blocked', label: 'Blocked' }
 ];
 const PAGE = 50;
 
@@ -148,6 +149,7 @@ export default function Calls() {
 // What happened on the call. In the to-call-back view every row is waiting, so it says for how long instead.
 function Outcome({ c, queue }: { c: Call; queue: boolean }) {
   if (c.answered) return <>{duration(c.duration_sec)}</>;
+  if (c.status === 'blocked') return <span className="text-ink-3">Blocked</span>;
   if (c.to_call_back) return queue ? <span className="text-ink-2">Waiting {ago(c.started_at).replace(' ago', '')}</span> : <span className="chip chip-warn">To call back</span>;
   return <span className="text-ink-2">{c.called_back_at ? 'Called back' : c.status === 'ringing' ? 'Ringing' : 'Missed'}</span>;
 }

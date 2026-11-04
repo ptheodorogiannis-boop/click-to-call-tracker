@@ -106,6 +106,20 @@ personal token in **Settings › API and MCP** and send it as `Authorization: Be
 `calls_to_call_back`, and for team members `set_lead_status`, `tag_call`, `add_note`,
 `mark_called_back`. Claude Code: `claude mcp add --transport http ruler-calls https://YOUR_BASE/mcp --header "Authorization: Bearer ct_…"`.
 
+## Lead tools (wave 2)
+- **Block list** per client (Clients › Blocked numbers, or "Block this caller" on a call). Exact numbers or ranges
+  (`+30690*`). A blocked caller is rejected before anything rings, logged as blocked spam, and never uploaded.
+- **Fixed numbers** (Clients › Numbers › Used for): a number printed on the Google Business Profile, a flyer or a radio
+  spot carries that source; the website pool never hands it out.
+- **Missed-call alerts** to Slack (incoming webhook) and email, and **scheduled reports** (every Monday or on the 1st)
+  by email with the call log attached (Clients › Alerts and reports). Email needs `SMTP_HOST`.
+- **Webhooks** (Settings › API, MCP and webhooks): every call as JSON when it ends and when someone works it, signed
+  with `X-CallTrack-Signature: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<body>">`, three tries.
+- **AI summaries** (with `ANTHROPIC_API_KEY`): a Greek summary and a suggested label and score per transcript, from
+  Claude (`claude-opus-5-5` by default, `AI_MODEL` to change; refusals fall back server-side). A suggestion only:
+  the lead status changes when someone chooses it.
+- **Health** on the client board: the number pool ran out, conversion uploads failing, no calls for a week.
+
 ## Reporting API
 - `GET /api/report/stats?client=client-acme&since=2026-06-01` → per-channel totals.
 - `GET /api/report/calls?client=client-acme` → call rows with attribution.
@@ -114,8 +128,8 @@ personal token in **Settings › API and MCP** and send it as `Authorization: Be
 - `GET /api/v2/reports/calls.csv` (signed in) exports the call log.
 
 ## Tests and local runs
-- `npm test`: access rules, client scope, lead work, the report API and MCP (through the SDK's own
-  client), on a throwaway database.
+- `npm test`: access rules, client scope, lead work, the report API, MCP (through the SDK's own client) and the
+  wave 2 tools (through the real Twilio webhooks, a local receiver and a mock Anthropic API), on a throwaway database.
 - Demo data: `DB_PATH=./data/demo.db node tools/demo.js`, then `node tools/run-demo.js` → http://localhost:8099,
   sign in as `admin` / `demo-password-1` (or `lyra@client.demo` for the client view).
 - Web app with hot reload: `node tools/run-demo.js` and `npm run dev:web` (port 5173, proxies the API).
@@ -128,6 +142,7 @@ call is logged as `channel=google_ads`, `gclid` preserved, `qualified=1`, `first
 
 ## Status / honesty
 - Since 2026-11-04 the backend runs locally on Node 24: `npm test` (24 tests) and `npm run simulate`
-  pass. It has **not** taken a real Twilio call yet; place a test call after deploying.
+  pass (35 tests). It has **not** taken a real Twilio call yet; place a test call after deploying.
+- Email, Slack and the Anthropic API are tested against local stand-ins, not the real services.
 - Google Ads / Meta / GA4 uploads are untested against the live APIs.
 - The browser DNI swapper (`public/dni-tracker.js`) was verified in a real browser.

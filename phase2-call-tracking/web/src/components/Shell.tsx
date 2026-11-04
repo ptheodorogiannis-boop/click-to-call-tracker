@@ -59,7 +59,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <Search />
             </button>
             <div className="h-6" />
-            <RailLink to="/settings/api" label="API and MCP" icon={<PlugZap />} />
+            <RailLink to="/settings/api" label="API, MCP and webhooks" icon={<PlugZap />} />
             {canEdit && <RailLink to="/settings/install" label="Website code" icon={<Code2 />} />}
             {isOwner && <RailLink to="/settings/team" label="Team and client logins" icon={<Users />} />}
             <RailLink to="/settings" label="Settings" icon={<Settings />} end />
@@ -139,7 +139,7 @@ function AccountMenu() {
           </div>
           <div className="my-1 h-px bg-line" />
           <MenuItem onClick={() => { setOpen(false); navigate('/settings'); }} icon={<Settings />}>Settings</MenuItem>
-          <MenuItem onClick={() => { setOpen(false); navigate('/settings/api'); }} icon={<PlugZap />}>API and MCP</MenuItem>
+          <MenuItem onClick={() => { setOpen(false); navigate('/settings/api'); }} icon={<PlugZap />}>API, MCP and webhooks</MenuItem>
           <MenuItem onClick={signOut} icon={<LogOut />}>Sign out</MenuItem>
         </div>
       )}

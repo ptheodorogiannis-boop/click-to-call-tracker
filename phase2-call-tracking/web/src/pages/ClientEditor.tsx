@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { Copy, Trash2 } from 'lucide-react';
-import { api, type ClientEditor as Data } from '../lib/api';
+import { Copy, Send, Trash2 } from 'lucide-react';
+import { api, type Blocked, type ClientEditor as Data } from '../lib/api';
 import { useLoad, useSession, useToast } from '../lib/hooks';
 import { phone } from '../lib/format';
 import { Drawer, ErrorState, Field, Loading } from '../components/ui';
 
-type Tab = 'details' | 'numbers' | 'conversions' | 'website' | 'logins';
+type Tab = 'details' | 'numbers' | 'blocked' | 'alerts' | 'conversions' | 'website' | 'logins';
 const TABS: { id: Tab; label: string; owner?: boolean }[] = [
   { id: 'details', label: 'Details' },
   { id: 'numbers', label: 'Numbers' },
+  { id: 'blocked', label: 'Blocked numbers' },
+  { id: 'alerts', label: 'Alerts and reports' },
   { id: 'conversions', label: 'Conversions' },
   { id: 'website', label: 'Website code' },
   { id: 'logins', label: 'Client logins', owner: true }
@@ -18,6 +20,7 @@ const EMPTY: Data = {
   client: {
     id: '', name: '', forward_number: '', active: true, recording_enabled: true, qualified_duration_sec: null, lead_value: 0, currency: 'EUR',
     consent_message: null, twilio_account_sid: '', twilio_auth_token_masked: '',
+    alert_missed: false, alert_emails: '', alert_slack_url_masked: '', report_schedule: 'off', report_emails: '', report_next_at: null,
     config: { googleAds: {}, meta: { pixelId: '', capiToken_masked: '', testEventCode: '' }, ga4: { measurementId: '', apiSecret_masked: '' } }
   },
   numbers: [], portal_users: []
@@ -62,6 +65,8 @@ export default function ClientEditor({ id, onClose, onSaved }: { id: string | nu
           {!isNew && (
             <>
               <div {...panel('numbers')}><Numbers data={current} onChange={(numbers) => { setData({ ...current, numbers }); onSaved(); }} /></div>
+              <div {...panel('blocked')}><BlockedNumbers clientId={current.client.id} /></div>
+              <div {...panel('alerts')}><AlertsReports key={current.client.id} data={current} onDirty={(on) => markDirty('alerts', on)} onSaved={(d) => setData(d)} /></div>
               <div {...panel('conversions')}><Conversions key={current.client.id} data={current} onDirty={(on) => markDirty('conversions', on)} onSaved={(d) => setData(d)} /></div>
               <div {...panel('website')}><Website data={current} base={me.public_base_url || window.location.origin} /></div>
               {isOwner && <div {...panel('logins')}><Logins data={current} onChange={reload} /></div>}
@@ -177,13 +182,15 @@ function Details({ data, isNew, onSaved, onDeleted, onDirty }: { data: Data; isN
 
 function Numbers({ data, onChange }: { data: Data; onChange: (n: Data['numbers']) => void }) {
   const toast = useToast();
+  const { me } = useSession();
   const [num, setNum] = useState('');
   const [label, setLabel] = useState('');
+  const [use, setUse] = useState('pool');
   const [busy, setBusy] = useState(false);
   const id = data.client.id;
   const add = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true);
-    try { const r = await api.post<{ numbers: Data['numbers'] }>(`/clients/${encodeURIComponent(id)}/numbers`, { phone: num, label }); onChange(r.numbers); setNum(''); setLabel(''); toast('Number added to the pool'); }
+    try { const r = await api.post<{ numbers: Data['numbers'] }>(`/clients/${encodeURIComponent(id)}/numbers`, use === 'pool' ? { phone: num, label } : { phone: num, label, kind: 'fixed', source: use }); onChange(r.numbers); setNum(''); setLabel(''); toast('Number added to the pool'); }
     catch (err) { toast((err as Error).message, 'error'); }
     finally { setBusy(false); }
   };
@@ -194,14 +201,15 @@ function Numbers({ data, onChange }: { data: Data; onChange: (n: Data['numbers']
   };
   return (
     <div className="space-y-5">
-      <p className="max-w-[60ch] text-[13px] text-ink-2">Each visitor from an ad gets one of these numbers for an hour, so the call carries their click. Size the pool to the busiest hour: about one number per visitor on the site at the same time. In Twilio, point each number’s voice webhook at <code className="text-[12px]">/webhooks/voice/incoming</code>.</p>
+      <p className="max-w-[60ch] text-[13px] text-ink-2">A fixed number is published in one place (the Google Business Profile, a flyer, a radio spot) and every call to it takes that source. Pool numbers are for the website: each visitor from an ad gets one of them for an hour, so the call carries their click. Size the pool to the busiest hour: about one number per visitor on the site at the same time. In Twilio, point each number’s voice webhook at <code className="text-[12px]">/webhooks/voice/incoming</code>.</p>
       {data.numbers.length ? (
         <table className="table">
-          <thead><tr><th>Number</th><th>Label</th><th className="r" /></tr></thead>
+          <thead><tr><th>Number</th><th>Used for</th><th>Label</th><th className="r" /></tr></thead>
           <tbody>
             {data.numbers.map((n) => (
               <tr key={n.phone}>
                 <td className="num">{phone(n.phone)}</td>
+                <td>{n.kind === 'fixed' ? me.fixed_sources[n.source || ''] || 'Fixed' : 'Website pool'}</td>
                 <td className="text-ink-2">{n.label || 'None'}</td>
                 <td className="r"><button className="icon-btn icon-btn-sm ml-auto" onClick={() => remove(n.phone)} aria-label={`Remove ${phone(n.phone)}`}><Trash2 /></button></td>
               </tr>
@@ -209,7 +217,13 @@ function Numbers({ data, onChange }: { data: Data; onChange: (n: Data['numbers']
           </tbody>
         </table>
       ) : <p className="text-[14px]">No numbers yet. Until one is added, the website keeps showing the client’s own number and no call is tracked.</p>}
-      <form className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end" onSubmit={add}>
+      <form className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end" onSubmit={add}>
+        <Field label="Used for" htmlFor="n-use">
+          <select id="n-use" className="select" value={use} onChange={(e) => setUse(e.target.value)}>
+            <option value="pool">Website pool</option>
+            {Object.entries(me.fixed_sources).map(([k, v]) => <option key={k} value={k}>Fixed: {v}</option>)}
+          </select>
+        </Field>
         <Field label="Tracking number" htmlFor="n-num"><input id="n-num" className="input num" required placeholder="+302100000001" value={num} onChange={(e) => setNum(e.target.value)} /></Field>
         <Field label="Label" htmlFor="n-label"><input id="n-label" className="input" placeholder="Pool 1" value={label} onChange={(e) => setLabel(e.target.value)} /></Field>
         <button className="btn" disabled={busy}>Add number</button>
@@ -318,5 +332,121 @@ function Logins({ data, onChange }: { data: Data; onChange: () => void }) {
         <div className="flex items-end"><button className="btn" disabled={busy}>Create login</button></div>
       </form>
     </div>
+  );
+}
+
+function BlockedNumbers({ clientId }: { clientId: string }) {
+  const toast = useToast();
+  const path = `/clients/${encodeURIComponent(clientId)}/blocked`;
+  const { data, error, reload, setData } = useLoad<{ blocked: Blocked[] }>(path);
+  const [pattern, setPattern] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const add = async (e: FormEvent) => {
+    e.preventDefault(); setBusy(true);
+    try { setData(await api.post<{ blocked: Blocked[] }>(path, { pattern, note })); setPattern(''); setNote(''); toast('Blocked'); }
+    catch (err) { toast((err as Error).message, 'error'); }
+    finally { setBusy(false); }
+  };
+  const remove = async (p: string) => {
+    try { setData(await api.del<{ blocked: Blocked[] }>(`${path}/${encodeURIComponent(p)}`)); toast('Unblocked'); }
+    catch (err) { toast((err as Error).message, 'error'); }
+  };
+  return (
+    <div className="space-y-5">
+      <p className="max-w-[60ch] text-[13px] text-ink-2">Calls from these numbers are turned away before anything rings. They are logged as blocked, never forwarded and never sent to the ad platforms. End a number with * to block a whole range, like +30690*.</p>
+      {error ? <ErrorState error={error} retry={reload} /> : !data ? <Loading rows={3} /> : data.blocked.length ? (
+        <table className="table">
+          <thead><tr><th>Number</th><th>Why</th><th className="r">Calls stopped</th><th className="r" /></tr></thead>
+          <tbody>
+            {data.blocked.map((b) => (
+              <tr key={b.pattern}>
+                <td className="num">{b.pattern.endsWith('*') ? b.pattern : phone(b.pattern)}</td>
+                <td className="text-ink-2">{b.note || 'None'}</td>
+                <td className="r num">{b.blocked_calls}</td>
+                <td className="r"><button className="btn btn-glass btn-sm ml-auto" onClick={() => remove(b.pattern)}>Unblock</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : <p className="text-[14px]">Nothing is blocked</p>}
+      <form className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end" onSubmit={add}>
+        <Field label="Number or range" htmlFor="b-num"><input id="b-num" className="input num" required placeholder="+302101234567 or +30690*" value={pattern} onChange={(e) => setPattern(e.target.value)} /></Field>
+        <Field label="Why" htmlFor="b-note"><input id="b-note" className="input" placeholder="Sales calls" value={note} onChange={(e) => setNote(e.target.value)} maxLength={120} /></Field>
+        <button className="btn" disabled={busy}>Block</button>
+      </form>
+    </div>
+  );
+}
+
+function AlertsReports({ data, onSaved, onDirty }: { data: Data; onSaved: (d: Data) => void; onDirty: (on: boolean) => void }) {
+  const { me } = useSession();
+  const toast = useToast();
+  const c = data.client;
+  const [f, setF] = useState({ alert_missed: c.alert_missed, alert_emails: c.alert_emails, slack: '', report_schedule: c.report_schedule, report_emails: c.report_emails });
+  const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => { setF((x) => ({ ...x, [k]: v })); onDirty(true); };
+  const { busy, err, save } = useSave();
+  const [sending, setSending] = useState('');
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const saved = await save({
+      ...payload(data), alert_missed: f.alert_missed, alert_emails: f.alert_emails, alert_slack_url: f.slack || undefined,
+      report_schedule: f.report_schedule, report_emails: f.report_emails
+    }, 'Alerts and reports saved');
+    if (saved) { setF((x) => ({ ...x, slack: '' })); onDirty(false); onSaved({ ...data, client: saved }); }
+  };
+  const run = async (what: 'alert' | 'report') => {
+    setSending(what);
+    try {
+      if (what === 'alert') {
+        const r = await api.post<{ sent: string[] }>(`/clients/${encodeURIComponent(c.id)}/alerts/test`);
+        toast(`Test sent to ${r.sent.join(' and ')}`);
+      } else {
+        await api.post(`/clients/${encodeURIComponent(c.id)}/report/send`);
+        toast('Report sent');
+      }
+    } catch (x) { toast((x as Error).message, 'error'); }
+    finally { setSending(''); }
+  };
+  const next = c.report_next_at
+    ? new Date(c.report_next_at.replace(' ', 'T') + 'Z').toLocaleString(undefined, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+    : null;
+  const slackHint = c.alert_slack_url_masked ? `Saved, ends in ${c.alert_slack_url_masked.slice(-4)}. Leave empty to keep it` : 'In Slack: Apps, Incoming Webhooks, add one to a channel';
+  return (
+    <form className="space-y-7" onSubmit={submit}>
+      {!me.features.email && <p className="rounded-[14px] bg-paper px-4 py-3 text-[13px]">Email is not set up on this server yet (SMTP_HOST in .env). Slack alerts work without it</p>}
+      <fieldset className="space-y-4">
+        <legend className="mb-3 text-[14px] font-medium">Missed calls</legend>
+        <label className="check"><input type="checkbox" checked={f.alert_missed} onChange={(e) => set('alert_missed', e.target.checked)} /> Tell someone the moment a call is missed</label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Email to" htmlFor="a-mail" hint="Several addresses: separate them with commas">
+            <input id="a-mail" className="input" placeholder="reception@client.gr" value={f.alert_emails} onChange={(e) => set('alert_emails', e.target.value)} />
+          </Field>
+          <Field label="Slack incoming webhook" htmlFor="a-slack" hint={slackHint}>
+            <input id="a-slack" className="input" type="url" placeholder="https://hooks.slack.com/services/…" value={f.slack} onChange={(e) => set('slack', e.target.value)} />
+          </Field>
+        </div>
+        <button type="button" className="btn btn-glass btn-sm" disabled={!!sending} onClick={() => run('alert')}><Send /> Send a test alert</button>
+      </fieldset>
+      <fieldset className="space-y-4">
+        <legend className="mb-3 text-[14px] font-medium">Report by email</legend>
+        <div className="seg flex-wrap" role="group" aria-label="How often">
+          {(['off', 'weekly', 'monthly'] as const).map((v) => (
+            <button type="button" key={v} aria-pressed={f.report_schedule === v} onClick={() => set('report_schedule', v)}>
+              {{ off: 'Off', weekly: 'Every Monday', monthly: 'On the 1st of each month' }[v]}
+            </button>
+          ))}
+        </div>
+        <Field label="Send to" htmlFor="r-mail"
+          hint={next && f.report_schedule === c.report_schedule && c.report_schedule !== 'off' ? `Next one: ${next}` : 'Calls, answer rate, leads, value, channels and campaigns, with the call log attached'}>
+          <input id="r-mail" className="input" placeholder="owner@client.gr" value={f.report_emails} onChange={(e) => set('report_emails', e.target.value)} />
+        </Field>
+        <button type="button" className="btn btn-glass btn-sm" disabled={!!sending || !c.report_emails} onClick={() => run('report')}>
+          <Send /> Send the last {c.report_schedule === 'monthly' ? 'month' : 'week'} now
+        </button>
+      </fieldset>
+      {err && <p className="text-[13px] text-down" role="alert">{err}</p>}
+      <div className="border-t border-line pt-5"><button className="btn" disabled={busy}>Save</button></div>
+    </form>
   );
 }
