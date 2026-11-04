@@ -39,7 +39,10 @@ async function whisper(call, client) {
   });
   if (!r.ok) return;
   const data = await r.json();
-  if (data.text) q.updateTranscript.run({ call_sid: call.call_sid, transcript: data.text });
+  if (data.text) {
+    q.updateTranscript.run({ call_sid: call.call_sid, transcript: data.text });
+    require('../events').emit('call.transcribed', call.call_sid);
+  }
 }
 
 module.exports = { transcribe };

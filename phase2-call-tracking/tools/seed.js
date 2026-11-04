@@ -30,7 +30,7 @@ q.upsertClient.run(client);
 
 // Demo pool — replace with real Twilio numbers.
 ['+302100000001', '+302100000002', '+302100000003', '+302100000004'].forEach(function (phone, i) {
-  q.upsertNumber.run({ phone, client_id: client.id, label: 'pool-' + (i + 1) });
+  q.upsertNumber.run({ phone, client_id: client.id, label: 'pool-' + (i + 1), kind: 'pool', source: null });
 });
 
 console.log('seeded client', client.id, 'with 4 pool numbers');

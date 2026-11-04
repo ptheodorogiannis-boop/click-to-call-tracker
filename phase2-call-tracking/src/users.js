@@ -88,6 +88,15 @@ function updateUser(id, { name, role, active, password, client_ids }) {
   return publicUser(s.byId.get(id));
 }
 
+// A person changing their own password must know the current one.
+function changePassword(userId, current, next) {
+  const u = s.byId.get(userId);
+  if (!u || !verifyPassword(current || '', u.password_hash)) return 'wrong';
+  if (!next || String(next).length < 10) return 'short';
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(next), userId);
+  return 'ok';
+}
+
 function setClients(userId, clientIds) {
   s.clearClients.run(userId);
   for (const c of clientIds || []) s.addClient.run(userId, c);
@@ -127,6 +136,6 @@ const listTokens = (userId) => s.tokenList.all(userId);
 const revokeToken = (userId, id) => s.tokenRevoke.run(id, userId).changes > 0;
 
 module.exports = {
-  ROLES, hashPassword, verifyPassword, getUser, login, listUsers, createUser, updateUser, bootstrapOwner,
+  ROLES, hashPassword, verifyPassword, getUser, login, listUsers, createUser, updateUser, bootstrapOwner, changePassword,
   clientIdsFor, canSeeClient, canEdit, isOwner, createToken, userForToken, listTokens, revokeToken
 };

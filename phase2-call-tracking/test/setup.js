@@ -20,7 +20,10 @@ Object.assign(process.env, {
   VALIDATE_TWILIO_SIGNATURE: 'false',
   TRANSCRIPTION_PROVIDER: 'none',
   OPENAI_API_KEY: '',
-  ANTHROPIC_API_KEY: ''
+  ANTHROPIC_API_KEY: '',
+  MAIL_TRANSPORT: 'json',
+  MAIL_FROM: 'Ruler Calls <calls@test.local>',
+  WEBHOOK_RETRY_MS: '5'
 });
 
 process.on('exit', () => { for (const f of [db, db + '-wal', db + '-shm']) { try { fs.unlinkSync(f); } catch (e) { /* gone */ } } });

@@ -66,4 +66,11 @@ function buildHangupTwiml(message) {
   return vr.toString();
 }
 
-module.exports = { validateTwilioSignature, buildConnectTwiml, buildHangupTwiml, resolveClient };
+// Turn a call away without answering it (a blocked caller hears it as busy, and nothing is billed as connected).
+function buildRejectTwiml() {
+  const vr = new VoiceResponse();
+  vr.reject({ reason: 'busy' });
+  return vr.toString();
+}
+
+module.exports = { validateTwilioSignature, buildConnectTwiml, buildHangupTwiml, buildRejectTwiml, resolveClient };

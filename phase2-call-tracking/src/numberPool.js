@@ -35,6 +35,7 @@ function assignNumber(clientId, attribution, meta = {}) {
     phone,
     visitor_id: meta.visitorId || null,
     expires_at: expiresAt,
+    fallback: fallback ? 1 : 0,
     channel: deriveChannel(a),
     gclid: a.gclid || null, gbraid: a.gbraid || null, wbraid: a.wbraid || null,
     fbclid: a.fbclid || null, msclkid: a.msclkid || null,

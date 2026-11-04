@@ -2,7 +2,9 @@
 const express = require('express');
 const cfg = require('../config');
 const { q } = require('../db');
-const { validateTwilioSignature, buildConnectTwiml, buildHangupTwiml } = require('../services/twilio');
+const { validateTwilioSignature, buildConnectTwiml, buildHangupTwiml, buildRejectTwiml } = require('../services/twilio');
+const { isBlocked } = require('../calls');
+const events = require('../events');
 const { normalizePhone } = require('../services/attribution');
 const { pushConversions } = require('../services/conversions');
 const { transcribe } = require('../services/transcription');
@@ -27,7 +29,23 @@ router.post('/incoming', (req, res) => {
     return res.type('text/xml').send(buildHangupTwiml('Ο αριθμός δεν είναι διαθέσιμος.'));
   }
 
-  const session = q.matchSession.get(trackingNumber) || {};
+  // A blocked caller is turned away before anything rings: logged as spam, never forwarded, never uploaded.
+  if (isBlocked(client.id, caller)) {
+    q.insertCall.run({
+      call_sid: callSid, client_id: client.id, tracking_number: trackingNumber, caller, status: 'blocked', first_time: null,
+      session_id: null, channel: 'direct', gclid: null, gbraid: null, wbraid: null, fbclid: null, msclkid: null,
+      utm_source: null, utm_medium: null, utm_campaign: null, utm_content: null, utm_term: null,
+      ga_client_id: null, fbp: null, fbc: null, landing_page: null, referrer: null, region: regionForPhone(caller)
+    });
+    q.markSpam.run(callSid);
+    events.emit('call.completed', callSid);
+    return res.type('text/xml').send(buildRejectTwiml());
+  }
+
+  // A fixed number (Google Business Profile, print, radio…) carries its own source; a pool number carries the visitor's.
+  const number = q.getNumber.get(trackingNumber) || {};
+  const fixed = number.kind === 'fixed';
+  const session = fixed ? {} : q.matchSession.get(trackingNumber) || {};
   const existingCaller = caller ? q.getCaller.get(client.id, caller) : null;
   const firstTime = existingCaller ? 0 : 1;
   if (caller) q.upsertCaller.run({ client_id: client.id, caller });
@@ -35,11 +53,11 @@ router.post('/incoming', (req, res) => {
   q.insertCall.run({
     call_sid: callSid, client_id: client.id, tracking_number: trackingNumber, caller,
     status: 'ringing', first_time: firstTime, session_id: session.id || null,
-    channel: session.channel || 'direct',
+    channel: fixed ? number.source || 'offline_other' : session.channel || 'direct',
     gclid: session.gclid || null, gbraid: session.gbraid || null, wbraid: session.wbraid || null,
     fbclid: session.fbclid || null, msclkid: session.msclkid || null,
     utm_source: session.utm_source || null, utm_medium: session.utm_medium || null,
-    utm_campaign: session.utm_campaign || null, utm_content: session.utm_content || null, utm_term: session.utm_term || null,
+    utm_campaign: fixed ? number.label || null : session.utm_campaign || null, utm_content: session.utm_content || null, utm_term: session.utm_term || null,
     ga_client_id: session.ga_client_id || null, fbp: session.fbp || null, fbc: session.fbc || null,
     landing_page: session.landing_page || null, referrer: session.referrer || null,
     region: regionForPhone(caller)
@@ -73,6 +91,7 @@ router.post('/dial-complete', (req, res) => {
     if (call.session_id) q.releaseSession.run(call.session_id);
 
     if (qualified) fireConversions(callSid);
+    events.emit('call.completed', callSid);
   }
   res.type('text/xml').send(buildHangupTwiml());
 });

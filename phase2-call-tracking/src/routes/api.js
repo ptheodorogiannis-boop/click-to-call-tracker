@@ -6,6 +6,12 @@ const { db, q } = require('../db');
 const users = require('../users');
 const calls = require('../calls');
 const { issue, clear, requireUser, requireEdit, requireOwner } = require('../auth');
+const { FIXED_SOURCES } = require('../sources');
+const ai = require('../services/ai');
+const mailer = require('../services/mailer');
+const reports = require('../services/reports');
+const webhooks = require('../services/webhooks');
+const crypto = require('crypto');
 
 const router = express.Router();
 const h = (fn) => (req, res, next) => { try { const r = fn(req, res, next); if (r && r.catch) r.catch(next); } catch (e) { next(e); } };
@@ -35,8 +41,17 @@ router.use(requireUser);
 router.get('/me', h((req, res) => res.json({
   user: req.user, brand: cfg.brand, public_base_url: cfg.publicBaseUrl,
   clients: calls.visibleClients(req.user).map((k) => ({ id: k.id, name: k.name, active: !!k.active, currency: k.currency })),
-  lead_statuses: calls.LEAD_STATUSES
+  lead_statuses: calls.LEAD_STATUSES,
+  fixed_sources: FIXED_SOURCES,
+  features: { ai: ai.enabled(), email: mailer.enabled() }
 })));
+
+router.post('/me/password', h((req, res) => {
+  const r = users.changePassword(req.user.id, req.body.current, req.body.next);
+  if (r === 'wrong') return res.status(400).json({ error: 'The current password is not right' });
+  if (r === 'short') return res.status(400).json({ error: 'The new password needs at least 10 characters' });
+  res.json({ ok: true });
+}));
 
 // ── reading ────────────────────────────────────────────
 router.get('/overview', h((req, res) => res.json(calls.overview(req.user, req.query))));
@@ -87,6 +102,8 @@ function clientForEditor(c) {
     recording_enabled: !!c.recording_enabled, qualified_duration_sec: c.qualified_duration_sec,
     lead_value: c.lead_value, currency: c.currency, consent_message: c.consent_message,
     twilio_account_sid: c.twilio_account_sid || '', twilio_auth_token_masked: mask(c.twilio_auth_token),
+    alert_missed: !!c.alert_missed, alert_emails: c.alert_emails || '', alert_slack_url_masked: mask(c.alert_slack_url),
+    report_schedule: c.report_schedule || 'off', report_emails: c.report_emails || '', report_next_at: c.report_next_at || null,
     config: {
       googleAds: conf.googleAds || {},
       meta: { pixelId: (conf.meta || {}).pixelId || '', capiToken_masked: mask((conf.meta || {}).capiToken), testEventCode: (conf.meta || {}).testEventCode || '' },
@@ -129,7 +146,102 @@ router.post('/clients', requireEdit, h((req, res) => {
     twilio_auth_token: keep(b.twilio_auth_token, existing && existing.twilio_auth_token),
     config_json: JSON.stringify(config)
   });
+  // Alerts and reports: only the fields that were sent change.
+  if (b.alert_missed !== undefined || b.alert_emails !== undefined || b.alert_slack_url !== undefined) {
+    const slack = keep(b.alert_slack_url, existing && existing.alert_slack_url);
+    // https only, except a receiver on this machine while testing
+    if (slack && !/^https:\/\//.test(slack) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(slack)) return res.status(400).json({ error: 'The Slack address must start with https://' });
+    db.prepare('UPDATE clients SET alert_missed = ?, alert_emails = ?, alert_slack_url = ? WHERE id = ?').run(
+      b.alert_missed === undefined ? (existing ? existing.alert_missed : 0) : (b.alert_missed ? 1 : 0),
+      b.alert_emails === undefined ? (existing && existing.alert_emails) || null : mailer.parseEmails(b.alert_emails).join(', ') || null,
+      b.alert_slack_url === '' ? null : slack, b.id);
+  }
+  if (b.report_emails !== undefined) db.prepare('UPDATE clients SET report_emails = ? WHERE id = ?').run(mailer.parseEmails(b.report_emails).join(', ') || null, b.id);
+  if (b.report_schedule !== undefined) {
+    if (!reports.SCHEDULES.includes(b.report_schedule)) return res.status(400).json({ error: 'report_schedule is off, weekly or monthly' });
+    if (!existing || existing.report_schedule !== b.report_schedule) reports.schedule(b.id, b.report_schedule);
+  }
   res.json({ client: clientForEditor(q.getClient.get(b.id)) });
+}));
+
+router.post('/clients/:id/report/send', requireEdit, h(async (req, res) => {
+  const k = q.getClient.get(req.params.id);
+  if (!k) return res.status(404).json({ error: 'not found' });
+  const r = await reports.sendReport(k.id, reports.periodFor(k.report_schedule === 'monthly' ? 'monthly' : 'weekly'));
+  if (r.skipped) return res.status(400).json({ error: r.skipped });
+  res.json({ ok: true });
+}));
+
+router.post('/clients/:id/alerts/test', requireEdit, h(async (req, res) => {
+  const k = q.getClient.get(req.params.id);
+  if (!k) return res.status(404).json({ error: 'not found' });
+  const text = `Test alert for ${k.name}: missed calls will arrive here.`;
+  const sent = [];
+  if (k.alert_slack_url) {
+    const r = await fetch(k.alert_slack_url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }), signal: AbortSignal.timeout(10000) }).catch((e) => ({ ok: false, status: e.message }));
+    if (!r.ok) return res.status(502).json({ error: `Slack did not accept it (${r.status})` });
+    sent.push('Slack');
+  }
+  const to = mailer.parseEmails(k.alert_emails);
+  if (to.length) {
+    const r = await mailer.send({ to, subject: `Test alert: ${k.name}`, text });
+    if (r.skipped) return res.status(400).json({ error: r.skipped });
+    sent.push('email');
+  }
+  if (!sent.length) return res.status(400).json({ error: 'Add a Slack address or an email first' });
+  res.json({ ok: true, sent });
+}));
+
+// ── block list ─────────────────────────────────────────
+router.get('/clients/:id/blocked', requireEdit, h((req, res) => res.json({ blocked: calls.listBlocked(req.user, req.params.id) })));
+router.post('/clients/:id/blocked', requireEdit, h((req, res) =>
+  res.json({ blocked: calls.addBlocked(req.user, req.params.id, req.body.pattern, req.body.note) })));
+router.delete('/clients/:id/blocked/:pattern', requireEdit, h((req, res) =>
+  res.json({ blocked: calls.removeBlocked(req.user, req.params.id, req.params.pattern) })));
+
+// Block this call's caller for its client, and mark the call spam.
+router.post('/calls/:sid/block', requireEdit, h((req, res) => {
+  const c = calls.getCall(req.user, req.params.sid);
+  if (!c.caller) return res.status(400).json({ error: 'This caller hid their number' });
+  calls.addBlocked(req.user, c.client_id, c.caller, req.body.note || 'Blocked from a call');
+  res.json({ call: calls.updateLead(req.user, c.call_sid, { lead_status: 'spam' }) });
+}));
+
+router.post('/calls/:sid/summarize', requireEdit, h(async (req, res) => {
+  calls.getCall(req.user, req.params.sid);
+  const r = await ai.summarise(req.params.sid);
+  if (r.skipped) return res.status(400).json({ error: r.skipped });
+  res.json({ call: calls.getCall(req.user, req.params.sid), reason: r.reason });
+}));
+
+// ── outbound webhooks (owner, member) ──────────────────
+const publicHook = (w) => ({ id: w.id, client_id: w.client_id, url: w.url, events: w.events.split(','), active: !!w.active, created_at: w.created_at, last_status: w.last_status, last_at: w.last_at, failures: w.failures });
+router.get('/webhooks', requireEdit, h((req, res) =>
+  res.json({ webhooks: db.prepare('SELECT * FROM webhooks ORDER BY created_at DESC').all().map(publicHook) })));
+router.post('/webhooks', requireEdit, h((req, res) => {
+  const url = String(req.body.url || '').trim();
+  if (!/^https?:\/\/[^\s]+$/.test(url)) return res.status(400).json({ error: 'A full address, like https://hooks.example.com/calls' });
+  const clientId = req.body.client_id || null;
+  if (clientId && !q.getClient.get(clientId)) return res.status(404).json({ error: 'unknown client' });
+  const ev = [].concat(req.body.events || ['call.completed', 'call.updated']).filter((e) => ['call.completed', 'call.updated'].includes(e));
+  if (!ev.length) return res.status(400).json({ error: 'Pick at least one event' });
+  const secret = 'whsec_' + crypto.randomBytes(24).toString('base64url');
+  const r = db.prepare('INSERT INTO webhooks (client_id, url, secret, events) VALUES (?, ?, ?, ?)').run(clientId, url, secret, ev.join(','));
+  res.json({ webhook: publicHook(db.prepare('SELECT * FROM webhooks WHERE id = ?').get(r.lastInsertRowid)), secret });
+}));
+router.delete('/webhooks/:id', requireEdit, h((req, res) => {
+  db.prepare('DELETE FROM webhooks WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+}));
+// Send the newest call (of the webhook's client, or any) to this webhook now.
+router.post('/webhooks/:id/test', requireEdit, h(async (req, res) => {
+  const w = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(req.params.id);
+  if (!w) return res.status(404).json({ error: 'not found' });
+  const latest = calls.listCalls(req.user, { client_id: w.client_id || undefined, limit: 1 }).calls[0];
+  if (!latest) return res.status(400).json({ error: 'There is no call to send yet' });
+  const ok = await webhooks.deliver({ ...w }, 'call.completed', calls.getCall(req.user, latest.call_sid));
+  const after = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(w.id);
+  res.status(ok ? 200 : 502).json({ ok, webhook: publicHook(after) });
 }));
 
 // Clients with call history are switched off, never deleted, so reports stay whole.
@@ -148,7 +260,9 @@ router.post('/clients/:id/numbers', requireEdit, h((req, res) => {
   const phone = String(req.body.phone || '').replace(/[^\d+]/g, '');
   if (!/^\+\d{8,15}$/.test(phone)) return res.status(400).json({ error: 'Number in international format, like +302101234567' });
   if (!q.getClient.get(req.params.id)) return res.status(404).json({ error: 'not found' });
-  q.upsertNumber.run({ phone, client_id: req.params.id, label: req.body.label || null });
+  const fixed = req.body.kind === 'fixed';
+  if (fixed && !FIXED_SOURCES[req.body.source]) return res.status(400).json({ error: 'Pick where this number is published' });
+  q.upsertNumber.run({ phone, client_id: req.params.id, label: req.body.label || null, kind: fixed ? 'fixed' : 'pool', source: fixed ? req.body.source : null });
   res.json({ numbers: q.listNumbers.all(req.params.id) });
 }));
 router.delete('/numbers/:phone', requireEdit, h((req, res) => {

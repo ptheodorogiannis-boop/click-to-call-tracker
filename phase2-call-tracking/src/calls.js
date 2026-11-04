@@ -4,6 +4,7 @@
 const { db } = require('./db');
 const { clientIdsFor, canSeeClient, canEdit } = require('./users');
 const { REGIONS } = require('./geo');
+const events = require('./events');
 
 const LEAD_STATUSES = ['new', 'good', 'not_lead', 'customer', 'spam'];
 const AD_CHANNELS = ['google_ads', 'meta_ads', 'microsoft_ads', 'other_paid'];
@@ -11,8 +12,8 @@ const AD_CHANNELS = ['google_ads', 'meta_ads', 'microsoft_ads', 'other_paid'];
 // A call counts as a lead when someone marked it good/customer, or nobody judged it and it qualified on duration.
 const LEAD = `(CASE WHEN c.lead_status IN ('good','customer') THEN 1 WHEN c.lead_status IN ('not_lead','spam') THEN 0 ELSE c.qualified END)`;
 const VALUE = `(CASE WHEN ${LEAD} = 1 THEN COALESCE(c.value, k.lead_value, 0) ELSE 0 END)`;
-const MISSED = `(CASE WHEN c.answered = 0 AND c.status != 'ringing' THEN 1 ELSE 0 END)`;
-const TO_CALL_BACK = `(c.answered = 0 AND c.status != 'ringing' AND c.caller IS NOT NULL AND c.called_back_at IS NULL
+const MISSED = `(CASE WHEN c.answered = 0 AND c.status NOT IN ('ringing','blocked') THEN 1 ELSE 0 END)`;
+const TO_CALL_BACK = `(c.answered = 0 AND c.status NOT IN ('ringing','blocked') AND c.caller IS NOT NULL AND c.called_back_at IS NULL
   AND c.lead_status NOT IN ('spam','not_lead') AND c.started_at >= datetime('now','-14 days')
   AND NOT EXISTS (SELECT 1 FROM calls l WHERE l.client_id = c.client_id AND l.caller = c.caller
                   AND l.answered = 1 AND l.started_at > c.started_at))`;
@@ -34,6 +35,9 @@ function where(user, f = {}) {
   if (f.client_id) { parts.push('c.client_id = ?'); params.push(f.client_id); }
   if (f.since) { parts.push('c.started_at >= ?'); params.push(f.since + ' 00:00:00'); }
   if (f.until) { parts.push("c.started_at < datetime(?, '+1 day')"); params.push(f.until); }
+  // Blocked callers never rang through: they stay out of every count unless asked for.
+  if (f.status === 'blocked') parts.push("c.status = 'blocked'");
+  else if (!f.include_blocked) parts.push("c.status != 'blocked'");
   if (f.status === 'answered') parts.push('c.answered = 1');
   if (f.status === 'missed') parts.push(MISSED + ' = 1');
   if (f.status === 'to_call_back') parts.push(TO_CALL_BACK);
@@ -182,6 +186,17 @@ function overview(user, q = {}) {
   };
 }
 
+// Health: things that quietly break tracking. A full pool shares numbers between visitors; failed uploads starve the
+// ad platforms' bidding; a client that went silent usually means the website code or the forwarding broke.
+const health = {
+  poolFull: db.prepare('SELECT COUNT(*) n FROM sessions WHERE client_id = ? AND fallback = 1 AND assigned_at >= ?'),
+  uploadErrors: db.prepare(`SELECT COUNT(*) n FROM calls WHERE client_id = ? AND started_at >= ? AND (
+    conv_google LIKE 'error%' OR conv_google LIKE 'partial_error%' OR conv_google = 'no_credentials'
+    OR conv_meta LIKE 'err%' OR conv_ga4 LIKE 'err%')`),
+  lastCall: db.prepare("SELECT COALESCE(MAX(started_at), '') at FROM calls WHERE client_id = ? AND status != 'blocked'")
+};
+const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+
 // One row per visible client with a daily trend, problems first.
 function clientBoard(user, q = {}) {
   const r = range(q);
@@ -194,6 +209,9 @@ function clientBoard(user, q = {}) {
     if (t.calls >= 5 && t.answer_rate < 0.7) flags.push('answer_rate');
     if (cb.count > 0) flags.push('call_back');
     if (p.calls >= 5 && t.calls < p.calls * 0.6) flags.push('calls_down');
+    if (health.poolFull.get(k.id, r.since + ' 00:00:00').n > 0) flags.push('pool_full');
+    if (health.uploadErrors.get(k.id, r.since + ' 00:00:00').n > 0) flags.push('uploads_failing');
+    if (k.active && (p.calls + t.calls) >= 5 && health.lastCall.get(k.id).at < daysAgo(7)) flags.push('silent');
     return {
       id: k.id, name: k.name, active: !!k.active, currency: k.currency,
       ...t, previous: { calls: p.calls, leads: p.leads, answer_rate: p.answer_rate },
@@ -224,6 +242,7 @@ const CALL_COLUMNS = `c.call_sid, c.client_id, k.name client_name, c.tracking_nu
   c.status, c.duration_sec, c.qualified, c.first_time, c.channel, c.utm_source, c.utm_medium, c.utm_campaign,
   c.utm_content, c.utm_term, c.landing_page, c.referrer, c.gclid, c.fbclid, c.msclkid, c.region, c.lead_status,
   c.value, k.lead_value default_value, k.currency, c.called_back_at, c.conv_google, c.conv_meta, c.conv_ga4,
+  c.ai_summary, c.ai_label, c.ai_score,
   (c.recording_url IS NOT NULL) has_recording, (c.transcript IS NOT NULL AND c.transcript != '') has_transcript,
   ${LEAD} is_lead, ${TO_CALL_BACK} to_call_back`;
 
@@ -292,6 +311,7 @@ function updateLead(user, sid, { lead_status, value } = {}) {
   if (value !== undefined && value !== null && !(Number.isFinite(Number(value)) && Number(value) >= 0)) throw new Invalid('value must be a number ≥ 0');
   if (lead_status !== undefined) db.prepare('UPDATE calls SET lead_status = ? WHERE call_sid = ?').run(lead_status, sid);
   if (value !== undefined) db.prepare('UPDATE calls SET value = ? WHERE call_sid = ?').run(value === null ? null : Number(value), sid);
+  events.emit('call.updated', sid);
   return getCall(user, sid);
 }
 
@@ -302,6 +322,7 @@ function tagCall(user, sid, { add = [], remove = [] } = {}) {
     for (const t of [].concat(add).map(cleanTag).filter(Boolean)) db.prepare('INSERT OR IGNORE INTO call_tags (call_sid, tag) VALUES (?, ?)').run(sid, t);
     for (const t of [].concat(remove).map(cleanTag).filter(Boolean)) db.prepare('DELETE FROM call_tags WHERE call_sid = ? AND tag = ?').run(sid, t);
   })();
+  events.emit('call.updated', sid);
   return getCall(user, sid);
 }
 
@@ -310,6 +331,7 @@ function addNote(user, sid, body) {
   const text = String(body || '').trim();
   if (!text) throw new Invalid('note text is required');
   db.prepare('INSERT INTO call_notes (call_sid, user_id, body) VALUES (?, ?, ?)').run(sid, user.id, text.slice(0, 4000));
+  events.emit('call.updated', sid);
   return getCall(user, sid);
 }
 
@@ -317,7 +339,41 @@ function markCalledBack(user, sid, done = true) {
   editable(user, sid);
   if (done) db.prepare("UPDATE calls SET called_back_at = datetime('now'), called_back_by = ? WHERE call_sid = ?").run(user.id, sid);
   else db.prepare('UPDATE calls SET called_back_at = NULL, called_back_by = NULL WHERE call_sid = ?').run(sid);
+  events.emit('call.updated', sid);
   return getCall(user, sid);
+}
+
+// ── block list (owner/member edit; checked on every inbound call) ──
+const cleanPattern = (p) => {
+  const t = String(p || '').replace(/[^\d+*]/g, '');
+  return /^\+\d{4,15}\*?$/.test(t) ? t : null;
+};
+function isBlocked(clientId, caller) {
+  if (!caller) return false;
+  return db.prepare('SELECT pattern FROM blocklist WHERE client_id = ?').all(clientId)
+    .some((r) => (r.pattern.endsWith('*') ? caller.startsWith(r.pattern.slice(0, -1)) : caller === r.pattern));
+}
+function listBlocked(user, clientId) {
+  scopedClient(user, clientId);
+  if (!canEdit(user)) throw new Forbidden();
+  return db.prepare(`SELECT b.pattern, b.note, b.created_at,
+      (SELECT COUNT(*) FROM calls c WHERE c.client_id = b.client_id AND c.status = 'blocked'
+        AND (c.caller = b.pattern OR (substr(b.pattern, -1) = '*' AND c.caller LIKE substr(b.pattern, 1, length(b.pattern) - 1) || '%'))) blocked_calls
+    FROM blocklist b WHERE b.client_id = ? ORDER BY b.created_at DESC`).all(clientId);
+}
+function addBlocked(user, clientId, pattern, note) {
+  scopedClient(user, clientId);
+  if (!canEdit(user)) throw new Forbidden();
+  const p = cleanPattern(pattern);
+  if (!p) throw new Invalid('A number in international format (+302101234567), or a prefix ending in * (+30690*)');
+  db.prepare('INSERT OR REPLACE INTO blocklist (client_id, pattern, note) VALUES (?, ?, ?)').run(clientId, p, note ? String(note).slice(0, 120) : null);
+  return listBlocked(user, clientId);
+}
+function removeBlocked(user, clientId, pattern) {
+  scopedClient(user, clientId);
+  if (!canEdit(user)) throw new Forbidden();
+  db.prepare('DELETE FROM blocklist WHERE client_id = ? AND pattern = ?').run(clientId, pattern);
+  return listBlocked(user, clientId);
 }
 
 function allTags(user) {
@@ -362,7 +418,7 @@ function toCsv(user, q = {}) {
 }
 
 module.exports = {
-  LEAD_STATUSES, NotFound, Forbidden, Invalid, range, visibleClients, scopedClient, overview, clientBoard, report,
+  LEAD_STATUSES, NotFound, Forbidden, Invalid, range, isBlocked, listBlocked, addBlocked, removeBlocked, visibleClients, scopedClient, overview, clientBoard, report,
   listCalls, getCall, callForRecording, updateLead, tagCall, addNote, markCalledBack, allTags, search, toCsv,
   totals, byChannel
 };

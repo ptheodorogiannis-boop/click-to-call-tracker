@@ -7,6 +7,11 @@ const { migrate } = require('./db');
 const { bootstrapOwner } = require('./users');
 
 migrate(); // ensure schema exists on boot
+// What reacts to call events: outbound webhooks, missed-call alerts, AI summaries.
+require('./services/webhooks');
+require('./services/alerts');
+require('./services/ai');
+
 const owner = bootstrapOwner();
 if (owner) console.log(`created owner "${owner.login}" from ADMIN_USER / ADMIN_PASSWORD`);
 

@@ -128,3 +128,30 @@ CREATE TABLE IF NOT EXISTS call_notes (
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_call_notes_call ON call_notes(call_sid);
+
+-- ── wave 2 ─────────────────────────────────────────────
+-- New columns (numbers.kind/source, sessions.fallback, calls.ai_*, clients alert/report settings) are added in
+-- db.js ensureColumns.
+
+-- Callers a client never wants to hear from: an exact number (+302101234567) or a prefix ending in * (+30690*).
+CREATE TABLE IF NOT EXISTS blocklist (
+  client_id   TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  pattern     TEXT NOT NULL,
+  note        TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (client_id, pattern)
+);
+
+-- Outbound webhooks: call events POSTed, HMAC-signed, to a URL. client_id NULL = every client.
+CREATE TABLE IF NOT EXISTS webhooks (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  client_id    TEXT REFERENCES clients(id) ON DELETE CASCADE,
+  url          TEXT NOT NULL,
+  secret       TEXT NOT NULL,
+  events       TEXT NOT NULL DEFAULT 'call.completed,call.updated',
+  active       INTEGER NOT NULL DEFAULT 1,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  last_status  TEXT,
+  last_at      TEXT,
+  failures     INTEGER NOT NULL DEFAULT 0
+);

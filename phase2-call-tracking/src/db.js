@@ -29,6 +29,19 @@ function ensureColumns() {
   add('calls', 'value', 'value REAL');
   add('calls', 'called_back_at', 'called_back_at TEXT');
   add('calls', 'called_back_by', 'called_back_by INTEGER');
+  add('numbers', 'kind', "kind TEXT NOT NULL DEFAULT 'pool'");          // pool (website DNI) | fixed (one source)
+  add('numbers', 'source', 'source TEXT');                              // a fixed number's channel, e.g. google_business
+  add('sessions', 'fallback', 'fallback INTEGER NOT NULL DEFAULT 0');   // 1 = the pool was full, the number is shared
+  add('calls', 'ai_summary', 'ai_summary TEXT');
+  add('calls', 'ai_label', 'ai_label TEXT');                            // the model's suggestion: good | not_lead | spam
+  add('calls', 'ai_score', 'ai_score INTEGER');                         // 0–100, how likely a real lead
+  add('calls', 'ai_at', 'ai_at TEXT');
+  add('clients', 'alert_missed', 'alert_missed INTEGER NOT NULL DEFAULT 0');
+  add('clients', 'alert_emails', 'alert_emails TEXT');
+  add('clients', 'alert_slack_url', 'alert_slack_url TEXT');
+  add('clients', 'report_schedule', "report_schedule TEXT NOT NULL DEFAULT 'off'");   // off | weekly | monthly
+  add('clients', 'report_emails', 'report_emails TEXT');
+  add('clients', 'report_next_at', 'report_next_at TEXT');
   if (!cols('calls').includes('region')) {
     db.exec('ALTER TABLE calls ADD COLUMN region TEXT');
     const { regionForPhone } = require('./geo');
@@ -58,9 +71,10 @@ const q = {
   listClients: db.prepare('SELECT * FROM clients ORDER BY name'),
   deleteClient: db.prepare('DELETE FROM clients WHERE id = ?'),
   upsertNumber: db.prepare(`
-    INSERT INTO numbers (phone,client_id,label,active) VALUES (@phone,@client_id,@label,1)
-    ON CONFLICT(phone) DO UPDATE SET client_id=excluded.client_id, label=excluded.label, active=1`),
-  poolNumbers: db.prepare('SELECT phone FROM numbers WHERE client_id = ? AND active = 1'),
+    INSERT INTO numbers (phone,client_id,label,active,kind,source) VALUES (@phone,@client_id,@label,1,@kind,@source)
+    ON CONFLICT(phone) DO UPDATE SET client_id=excluded.client_id, label=excluded.label, active=1, kind=excluded.kind, source=excluded.source`),
+  poolNumbers: db.prepare("SELECT phone FROM numbers WHERE client_id = ? AND active = 1 AND kind = 'pool'"),
+  getNumber: db.prepare('SELECT * FROM numbers WHERE phone = ? AND active = 1'),
   listNumbers: db.prepare('SELECT * FROM numbers WHERE client_id = ? ORDER BY created_at'),
   deleteNumber: db.prepare('DELETE FROM numbers WHERE phone = ?'),
   countNumbers: db.prepare('SELECT COUNT(*) n FROM numbers WHERE client_id = ? AND active = 1'),
@@ -69,17 +83,17 @@ const q = {
   // numbers in this client's pool with NO active (unreleased & unexpired) reservation
   freeNumbers: db.prepare(`
     SELECT n.phone FROM numbers n
-    WHERE n.client_id = ? AND n.active = 1
+    WHERE n.client_id = ? AND n.active = 1 AND n.kind = 'pool'
       AND NOT EXISTS (
         SELECT 1 FROM sessions s
         WHERE s.phone = n.phone AND s.released = 0 AND s.expires_at > datetime('now')
       )
     LIMIT 1`),
   insertSession: db.prepare(`
-    INSERT INTO sessions (id,client_id,phone,visitor_id,expires_at,channel,
+    INSERT INTO sessions (id,client_id,phone,visitor_id,expires_at,fallback,channel,
       gclid,gbraid,wbraid,fbclid,msclkid,utm_source,utm_medium,utm_campaign,utm_content,utm_term,
       ga_client_id,fbp,fbc,landing_page,referrer,user_agent,ip)
-    VALUES (@id,@client_id,@phone,@visitor_id,@expires_at,@channel,
+    VALUES (@id,@client_id,@phone,@visitor_id,@expires_at,@fallback,@channel,
       @gclid,@gbraid,@wbraid,@fbclid,@msclkid,@utm_source,@utm_medium,@utm_campaign,@utm_content,@utm_term,
       @ga_client_id,@fbp,@fbc,@landing_page,@referrer,@user_agent,@ip)`),
   // best match for an inbound call: the most recent reservation for this number (active first)
@@ -113,6 +127,7 @@ const q = {
   updateRecording: db.prepare(
     `UPDATE calls SET recording_url=@recording_url, recording_sid=@recording_sid WHERE call_sid=@call_sid`),
   updateTranscript: db.prepare('UPDATE calls SET transcript=@transcript WHERE call_sid=@call_sid'),
+  markSpam: db.prepare("UPDATE calls SET lead_status = 'spam' WHERE call_sid = ?"),
   updateConv: db.prepare(
     `UPDATE calls SET conv_google=COALESCE(@conv_google,conv_google), conv_meta=COALESCE(@conv_meta,conv_meta), conv_ga4=COALESCE(@conv_ga4,conv_ga4) WHERE call_sid=@call_sid`),
   callByRecordingSid: db.prepare('SELECT * FROM calls WHERE recording_sid = ?'),
