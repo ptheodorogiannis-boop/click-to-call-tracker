@@ -184,7 +184,7 @@ function SearchDialog({ onClose }: { onClose: () => void }) {
             }} />
         </div>
         <ul className="max-h-[50vh] overflow-y-auto p-2" role="listbox" aria-label="Results">
-          {debounced.length < 2 && <li className="px-3 py-4 text-[13px] text-ink-3">Type two letters or more.</li>}
+          {debounced.length < 2 && <li className="px-3 py-4 text-[13px] text-ink-3">Type two letters or more</li>}
           {debounced.length >= 2 && !loading && !items.length && <li className="px-3 py-4 text-[13px] text-ink-3">No matches for “{debounced}”.</li>}
           {items.map((it, i) => (
             <li key={it.key} role="option" aria-selected={i === sel}>

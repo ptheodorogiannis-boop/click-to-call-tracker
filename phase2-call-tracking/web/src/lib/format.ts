@@ -5,7 +5,7 @@ export const int = (n: number | null | undefined) => (n == null ? 'No data' : ne
 export const pct = (n: number | null | undefined, digits = 0) =>
   n == null ? 'No data' : new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: digits }).format(n);
 export const money = (n: number, currency = 'EUR') =>
-  new Intl.NumberFormat(locale, { style: 'currency', currency, maximumFractionDigits: n >= 1000 ? 0 : 2 }).format(n);
+  new Intl.NumberFormat(locale, { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: Number.isInteger(n) || n >= 1000 ? 0 : 2 }).format(n);
 export const compact = (n: number) => new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
 
 export function duration(sec: number) {

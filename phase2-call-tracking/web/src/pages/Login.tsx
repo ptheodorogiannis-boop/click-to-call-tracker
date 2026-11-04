@@ -19,7 +19,7 @@ export default function Login({ onSignedIn }: { onSignedIn: (u: User) => void })
         <p className="mb-8 text-[22px] font-semibold tracking-[-0.02em]">RULE<span className="inline-block -scale-x-100">R</span> <span className="text-[15px] font-normal text-ink-3">Calls</span></p>
         <form className="overlay rise rounded-tile p-7" onSubmit={submit}>
           <h1 className="mb-1 text-[28px] font-normal tracking-[-0.02em]">Sign in</h1>
-          <p className="mb-6 text-[14px] text-ink-2">Calls, the campaigns behind them, and who to call back.</p>
+          <p className="mb-6 text-[14px] text-ink-2">Calls, the campaigns behind them, and who to call back</p>
           <div className="space-y-4">
             <div>
               <label className="label" htmlFor="login">Email or username</label>

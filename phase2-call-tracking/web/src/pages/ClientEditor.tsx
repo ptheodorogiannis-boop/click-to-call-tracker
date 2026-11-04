@@ -107,11 +107,11 @@ function Details({ data, isNew, onSaved, onDeleted }: { data: Data; isNew: boole
           <input id="c-name" className="input" required value={c.name}
             onChange={(e) => { set('name', e.target.value); if (isNew && !idTouched) set('id', slug(e.target.value)); }} />
         </Field>
-        <Field label="Short id" htmlFor="c-id" hint={isNew ? 'Used in the website code; cannot change later.' : 'Used in the website code.'}>
+        <Field label="Short id" htmlFor="c-id" hint={isNew ? 'Used in the website code; cannot change later' : 'Used in the website code'}>
           <input id="c-id" className="input" required disabled={!isNew} pattern="[a-z0-9][a-z0-9\-]{1,48}" value={c.id}
             onChange={(e) => { setIdTouched(true); set('id', slug(e.target.value)); }} />
         </Field>
-        <Field label="Their real phone line" htmlFor="c-fwd" hint="Calls to tracking numbers ring here.">
+        <Field label="Their real phone line" htmlFor="c-fwd" hint="Calls to tracking numbers ring here">
           <input id="c-fwd" className="input num" required placeholder="+302101234567" value={c.forward_number} onChange={(e) => set('forward_number', e.target.value.trim())} />
         </Field>
         <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-2">
@@ -140,10 +140,10 @@ function Details({ data, isNew, onSaved, onDeleted }: { data: Data; isNew: boole
         </Field>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Twilio account SID" htmlFor="c-sid" hint="The client’s own Twilio account or subaccount.">
+        <Field label="Twilio account SID" htmlFor="c-sid" hint="The client’s own Twilio account or subaccount">
           <input id="c-sid" className="input num" placeholder="AC…" value={c.twilio_account_sid} onChange={(e) => set('twilio_account_sid', e.target.value.trim())} />
         </Field>
-        <Field label="Twilio auth token" htmlFor="c-tok" hint={c.twilio_auth_token_masked ? `Saved, ends in ${c.twilio_auth_token_masked.slice(-4)}. Leave empty to keep it.` : 'Stored on the server, never shown again.'}>
+        <Field label="Twilio auth token" htmlFor="c-tok" hint={c.twilio_auth_token_masked ? `Saved, ends in ${c.twilio_auth_token_masked.slice(-4)}. Leave empty to keep it.` : 'Stored on the server, never shown again'}>
           <input id="c-tok" className="input" type="password" autoComplete="new-password" value={token} onChange={(e) => setToken(e.target.value)} />
         </Field>
       </div>
@@ -210,7 +210,7 @@ function Conversions({ data, onSaved }: { data: Data; onSaved: (d: Data) => void
     const saved = await save({ ...payload(data), googleAds: g, meta: { ...m, capiToken: m.capiToken || undefined }, ga4: { ...a, apiSecret: a.apiSecret || undefined } }, 'Conversion settings saved');
     if (saved) { setM((x) => ({ ...x, capiToken: '' })); setA((x) => ({ ...x, apiSecret: '' })); onSaved({ ...data, client: saved }); }
   };
-  const kept = (masked: string) => (masked ? `Saved, ends in ${masked.slice(-4)}. Leave empty to keep it.` : 'Stored on the server, never shown again.');
+  const kept = (masked: string) => (masked ? `Saved, ends in ${masked.slice(-4)}. Leave empty to keep it` : 'Stored on the server, never shown again');
   return (
     <form className="space-y-7" onSubmit={submit}>
       <p className="max-w-[60ch] text-[13px] text-ink-2">Qualified calls are sent here as conversions, with the lead value. Google Ads needs the visitor’s click id, so it only receives calls from ad clicks.</p>
@@ -223,7 +223,7 @@ function Conversions({ data, onSaved }: { data: Data; onSaved: (d: Data) => void
         <legend className="mb-3 text-[14px] font-medium">Meta</legend>
         <Field label="Pixel id" htmlFor="m-px"><input id="m-px" className="input num" value={m.pixelId} onChange={(e) => setM({ ...m, pixelId: e.target.value.trim() })} /></Field>
         <Field label="Conversions API token" htmlFor="m-tok" hint={kept(c.meta.capiToken_masked)}><input id="m-tok" className="input" type="password" autoComplete="new-password" value={m.capiToken} onChange={(e) => setM({ ...m, capiToken: e.target.value })} /></Field>
-        <Field label="Test event code" htmlFor="m-test" hint="Only while testing in Events Manager."><input id="m-test" className="input" value={m.testEventCode} onChange={(e) => setM({ ...m, testEventCode: e.target.value.trim() })} /></Field>
+        <Field label="Test event code" htmlFor="m-test" hint="Only while testing in Events Manager"><input id="m-test" className="input" value={m.testEventCode} onChange={(e) => setM({ ...m, testEventCode: e.target.value.trim() })} /></Field>
       </fieldset>
       <fieldset className="grid gap-4 sm:grid-cols-2">
         <legend className="mb-3 text-[14px] font-medium">Google Analytics 4</legend>
@@ -283,14 +283,14 @@ function Logins({ data, onChange }: { data: Data; onChange: () => void }) {
       ) : <p className="text-[14px]">Nobody from {data.client.name} can sign in yet.</p>}
       {shown && (
         <div className="rounded-[14px] bg-paper p-4 text-[13px]" role="status">
-          <p className="font-medium">Send these to the client now; the password is not shown again.</p>
+          <p className="font-medium">Send these to the client now; the password is not shown again</p>
           <code className="mt-1 block break-all">{shown}</code>
         </div>
       )}
       <form className="grid gap-3 sm:grid-cols-2" onSubmit={add}>
         <Field label="Name" htmlFor="u-name"><input id="u-name" className="input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
         <Field label="Email" htmlFor="u-login"><input id="u-login" className="input" type="email" required value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} /></Field>
-        <Field label="Password" htmlFor="u-pass" hint="At least 10 characters.">
+        <Field label="Password" htmlFor="u-pass" hint="At least 10 characters">
           <div className="flex gap-2">
             <input id="u-pass" className="input" required minLength={10} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
             <button type="button" className="btn btn-glass" onClick={generate}>Generate</button>

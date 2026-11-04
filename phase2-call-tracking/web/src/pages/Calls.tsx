@@ -81,10 +81,10 @@ export default function Calls() {
       <Tile tone="solid" className="p-5" delay={60}>
         {error && !data ? <ErrorState error={error} retry={reload} /> : !data ? <Loading rows={8} label="Loading calls" /> : !data.calls.length ? (
           status === 'to_call_back'
-            ? <Empty title="Nobody is waiting for a call back">Missed calls from the last 14 days show up here until someone calls them back or they call again and get through.</Empty>
+            ? <Empty title="Nobody is waiting for a call back">Missed calls from the last 14 days show up here until someone calls them back or they call again and get through</Empty>
             : q || chan || lead || status
               ? <Empty title="No calls match these filters" action={<button className="btn btn-glass btn-sm" onClick={() => setSp(new URLSearchParams(days !== 30 ? { days: String(days) } : {}))}>Clear filters</button>} />
-              : <Empty title="No calls in this period">Calls appear here a few seconds after someone rings a tracking number.</Empty>
+              : <Empty title="No calls in this period">Calls appear here a few seconds after someone rings a tracking number</Empty>
         ) : (
           <div className={loading ? 'opacity-70 transition-opacity' : ''} aria-busy={loading}>
             <div className="overflow-x-auto">

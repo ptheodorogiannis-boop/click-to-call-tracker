@@ -44,7 +44,7 @@ function Account() {
           <dt className="text-ink-3">Role</dt><dd>{{ owner: 'Owner: everything, including team and client logins', member: 'Team member: calls, leads and clients', client: 'Client: your calls and reports, read only' }[me.user.role]}</dd>
           <dt className="text-ink-3">Clients</dt><dd>{me.clients.map((k) => k.name).join(', ') || 'None yet'}</dd>
         </dl>
-        <p className="mt-4 text-[13px] text-ink-2">To change your password, ask the owner of this workspace.</p>
+        <p className="mt-4 text-[13px] text-ink-2">To change your password, ask the owner of this workspace</p>
       </Tile>
       <Tile className="p-5">
         <TileHead title="Look" />
@@ -93,7 +93,7 @@ function ApiAccess() {
       <Tile className="p-5 xl:col-span-5">
         <TileHead title="Your tokens" sub="Each one acts as you, with your access" />
         {error ? <ErrorState error={error} retry={reload} /> : !data ? <Loading rows={3} /> : !data.tokens.length ? (
-          <p className="mb-4 text-[14px]">No tokens yet.</p>
+          <p className="mb-4 text-[14px]">No tokens yet</p>
         ) : (
           <table className="table mb-5">
             <thead><tr><th>Name</th><th>Starts with</th><th>Last used</th><th /></tr></thead>

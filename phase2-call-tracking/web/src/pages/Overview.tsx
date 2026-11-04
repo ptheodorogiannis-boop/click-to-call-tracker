@@ -65,7 +65,7 @@ function MapTile({ data }: { data: OverviewData }) {
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
         <div className="relative min-h-[260px]">
           {placed ? <div className="absolute inset-0"><GreeceMap geo={g} compact /></div>
-            : <Empty title="No landline calls yet">Mobile numbers carry no area code, so they never appear on the map.</Empty>}
+            : <Empty title="No landline calls yet">Mobile numbers carry no area code, so they never appear on the map</Empty>}
         </div>
         <dl className="flex flex-col justify-end gap-2 text-[13px]">
           {g.regions.slice(0, 4).map((r) => (
@@ -84,7 +84,7 @@ function MissedTile({ data }: { data: OverviewData }) {
   const worse = data.previous.missed > 0 ? t.missed > data.previous.missed : t.missed > 0;
   return (
     <Tile className="p-5 md:col-span-3 lg:col-span-3" delay={120}>
-      <TileHead title="Missed" to={`/calls${qs({ status: 'missed', client_id: data.client?.id })}`} />
+      <TileHead title="Missed" sub={`Change against the ${data.range.days} days before`} to={`/calls${qs({ status: 'missed', client_id: data.client?.id })}`} />
       <div className="figure">{int(t.missed)}<Delta value={change(t.missed, data.previous.missed)} lowerIsBetter /></div>
       <div className="mt-2 text-ink-2"><Sparkline values={data.daily.map((d) => d.missed)} accent={worse} label={`Missed calls per day over ${data.range.days} days`} /></div>
     </Tile>
@@ -140,7 +140,7 @@ function LatestCalls({ clientId }: { clientId?: string }) {
     <Tile tone="solid" className="p-5 md:col-span-6 lg:col-span-7" delay={200}>
       <TileHead title="Latest calls" to={`/calls${qs({ client_id: clientId })}`} />
       {error ? <ErrorState error={error} retry={reload} /> : !data ? <Loading rows={5} /> : !data.calls.length ? (
-        <Empty title="No calls yet">Calls appear here a few seconds after someone rings a tracking number.</Empty>
+        <Empty title="No calls yet">Calls appear here a few seconds after someone rings a tracking number</Empty>
       ) : (
         <table className="table">
           <thead><tr><th>When</th><th>Caller</th><th>Source</th><th className="r">Length</th></tr></thead>
