@@ -9,6 +9,7 @@ const { issue, clear, requireUser, requireEdit, requireOwner } = require('../aut
 const { FIXED_SOURCES } = require('../sources');
 const ai = require('../services/ai');
 const mailer = require('../services/mailer');
+const viber = require('../services/viber');
 const reports = require('../services/reports');
 const webhooks = require('../services/webhooks');
 const crypto = require('crypto');
@@ -43,7 +44,7 @@ router.get('/me', h((req, res) => res.json({
   clients: calls.visibleClients(req.user).map((k) => ({ id: k.id, name: k.name, active: !!k.active, currency: k.currency })),
   lead_statuses: calls.LEAD_STATUSES,
   fixed_sources: FIXED_SOURCES,
-  features: { ai: ai.enabled(), email: mailer.enabled() }
+  features: { ai: ai.enabled(), email: mailer.enabled(), viber: viber.enabled() }
 })));
 
 router.post('/me/password', h((req, res) => {
@@ -188,9 +189,27 @@ router.post('/clients/:id/alerts/test', requireEdit, h(async (req, res) => {
     if (r.skipped) return res.status(400).json({ error: r.skipped });
     sent.push('email');
   }
-  if (!sent.length) return res.status(400).json({ error: 'Add a Slack address or an email first' });
+  if (viber.enabled() && viber.subscribers(k.id).length) {
+    const n = await viber.alert(k.id, text);
+    if (!n) return res.status(502).json({ error: 'Viber did not deliver it' });
+    sent.push('Viber');
+  }
+  if (!sent.length) return res.status(400).json({ error: 'Add a Slack address, an email or a Viber contact first' });
   res.json({ ok: true, sent });
 }));
+
+// ── Viber contacts for a client's alerts ───────────────
+router.get('/clients/:id/viber', requireEdit, h((req, res) => {
+  if (!q.getClient.get(req.params.id)) return res.status(404).json({ error: 'not found' });
+  res.json({ enabled: viber.enabled(), bot_uri: process.env.VIBER_BOT_URI || null, subscribers: viber.subscribers(req.params.id) });
+}));
+router.post('/clients/:id/viber/link', requireEdit, h((req, res) => {
+  if (!viber.enabled()) return res.status(400).json({ error: 'Viber is not set up on this server (VIBER_AUTH_TOKEN)' });
+  if (!q.getClient.get(req.params.id)) return res.status(404).json({ error: 'not found' });
+  res.json(viber.linkCode(req.params.id));
+}));
+router.delete('/clients/:id/viber/:viberId', requireEdit, h((req, res) =>
+  res.json({ ok: viber.removeSubscriber(req.params.id, req.params.viberId) })));
 
 // ── block list ─────────────────────────────────────────
 router.get('/clients/:id/blocked', requireEdit, h((req, res) => res.json({ blocked: calls.listBlocked(req.user, req.params.id) })));

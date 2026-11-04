@@ -5,6 +5,7 @@ const { q } = require('../db');
 const events = require('../events');
 const calls = require('../calls');
 const mailer = require('./mailer');
+const viber = require('./viber');
 const { channel } = require('../sources');
 
 const SYSTEM = { id: 0, role: 'owner', name: 'alerts' };
@@ -30,6 +31,7 @@ async function onCompleted(callSid) {
   }
   const to = mailer.parseEmails(client.alert_emails);
   if (to.length) jobs.push(mailer.send({ to, subject: `Missed call: ${client.name}`, text }));
+  if (viber.enabled() && viber.subscribers(client.id).length) jobs.push(viber.alert(client.id, text));
   const results = await Promise.allSettled(jobs);
   for (const r of results) if (r.status === 'rejected') console.error('[alerts]', callSid, String(r.reason).slice(0, 160));
 }

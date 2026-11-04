@@ -14,9 +14,9 @@ Each client uses **their own Twilio credentials**, isolated per account.
 - **Tests:** `npm test` (node:test, throwaway DB). **Demo:** `DB_PATH=./data/demo.db node tools/demo.js`, then `node tools/run-demo.js` (port 8099).
 
 ## Wave 2 (2026-11-04)
-Block list, fixed source numbers, missed-call alerts (Slack, email), scheduled email reports, outbound webhooks,
+Block list, fixed source numbers, missed-call alerts (Slack, email, Viber), scheduled email reports, outbound webhooks,
 AI call summaries (Claude), health flags, password change and reset. New optional `.env` values: `SMTP_*`,
-`MAIL_FROM`, `ANTHROPIC_API_KEY`, `AI_MODEL`, `TRUST_PROXY` (see `.env.example`). Reports are sent by the app
+`MAIL_FROM`, `VIBER_*`, `ANTHROPIC_API_KEY`, `AI_MODEL`, `TRUST_PROXY` (see `.env.example`). Reports are sent by the app
 itself every 15 minutes when due; nothing extra to schedule.
 
 ## 1. What it does

@@ -7,7 +7,7 @@ export interface User { id: number; login: string; name: string; role: Role; act
 export interface ClientRef { id: string; name: string; active: boolean; currency: string }
 export interface Me {
   user: User; brand: { name: string; company: string }; public_base_url: string; clients: ClientRef[]; lead_statuses: LeadStatus[];
-  fixed_sources: Record<string, string>; features: { ai: boolean; email: boolean };
+  fixed_sources: Record<string, string>; features: { ai: boolean; email: boolean; viber: boolean };
 }
 
 export interface Range { since: string; until: string; days: number; prev_since: string; prev_until: string }

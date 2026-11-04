@@ -118,7 +118,9 @@ personal token in **Settings › API and MCP** and send it as `Authorization: Be
   (`+30690*`). A blocked caller is rejected before anything rings, logged as blocked spam, and never uploaded.
 - **Fixed numbers** (Clients › Numbers › Used for): a number printed on the Google Business Profile, a flyer or a radio
   spot carries that source; the website pool never hands it out.
-- **Missed-call alerts** to Slack (incoming webhook) and email, and **scheduled reports** (every Monday or on the 1st)
+- **Missed-call alerts** to Slack (incoming webhook), email and **Viber** (one agency bot; a person links themselves by
+  sending the bot a one-time code from the client's Alerts and reports; `VIBER_AUTH_TOKEN`, then
+  `node tools/viber-set-webhook.js` once. Viber bots are a paid commercial service since February 2024), and **scheduled reports** (every Monday or on the 1st)
   by email with the call log attached (Clients › Alerts and reports). Email needs `SMTP_HOST`.
 - **Webhooks** (Settings › API, MCP and webhooks): every call as JSON when it ends and when someone works it, signed
   with `X-CallTrack-Signature: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<body>">`, three tries.
@@ -136,6 +138,8 @@ personal token in **Settings › API and MCP** and send it as `Authorization: Be
 - `GET /api/v2/reports/calls.csv` (signed in) exports the call log.
 
 ## Tests and local runs
+- `node tools/ai-smoke.js` (with `ANTHROPIC_API_KEY`): one real request to Claude on a made-up Greek transcript, through
+  the app's own code, to prove the AI summaries work against the live API.
 - `npm test`: access rules, client scope, lead work, the report API, MCP (through the SDK's own client) and the
   wave 2 tools (through the real Twilio webhooks, a local receiver and a mock Anthropic API), on a throwaway database.
 - Demo data: `DB_PATH=./data/demo.db node tools/demo.js`, then `node tools/run-demo.js` → http://localhost:8099,

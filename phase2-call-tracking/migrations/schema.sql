@@ -155,3 +155,19 @@ CREATE TABLE IF NOT EXISTS webhooks (
   last_at      TEXT,
   failures     INTEGER NOT NULL DEFAULT 0
 );
+
+-- ── Viber alerts (one agency bot) ──────────────────────
+-- A person links their Viber to a client by sending the bot a short code made in Alerts and reports.
+CREATE TABLE IF NOT EXISTS viber_links (
+  code        TEXT PRIMARY KEY,
+  client_id   TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS viber_subscribers (
+  client_id   TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  viber_id    TEXT NOT NULL,
+  name        TEXT,
+  linked_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (client_id, viber_id)
+);

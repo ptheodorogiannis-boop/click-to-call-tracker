@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { Copy, Send, Trash2 } from 'lucide-react';
 import { api, type Blocked, type ClientEditor as Data } from '../lib/api';
 import { useLoad, useSession, useToast } from '../lib/hooks';
-import { phone } from '../lib/format';
+import { ago, phone } from '../lib/format';
 import { Drawer, ErrorState, Field, Loading } from '../components/ui';
 
 type Tab = 'details' | 'numbers' | 'blocked' | 'alerts' | 'conversions' | 'website' | 'logins';
@@ -426,6 +426,7 @@ function AlertsReports({ data, onSaved, onDirty }: { data: Data; onSaved: (d: Da
             <input id="a-slack" className="input" type="url" placeholder="https://hooks.slack.com/services/…" value={f.slack} onChange={(e) => set('slack', e.target.value)} />
           </Field>
         </div>
+        <ViberContacts clientId={c.id} />
         <button type="button" className="btn btn-glass btn-sm" disabled={!!sending} onClick={() => run('alert')}><Send /> Send a test alert</button>
       </fieldset>
       <fieldset className="space-y-4">
@@ -448,5 +449,48 @@ function AlertsReports({ data, onSaved, onDirty }: { data: Data; onSaved: (d: Da
       {err && <p className="text-[13px] text-down" role="alert">{err}</p>}
       <div className="border-t border-line pt-5"><button className="btn" disabled={busy}>Save</button></div>
     </form>
+  );
+}
+
+// People who get this client's missed-call alerts on Viber. They link themselves by sending the bot a one-time code.
+function ViberContacts({ clientId }: { clientId: string }) {
+  const toast = useToast();
+  const path = `/clients/${encodeURIComponent(clientId)}/viber`;
+  const { data, reload } = useLoad<{ enabled: boolean; bot_uri: string | null; subscribers: { viber_id: string; name: string | null; linked_at: string }[] }>(path);
+  const [code, setCode] = useState<string | null>(null);
+  if (!data) return null;
+  if (!data.enabled) return <p className="text-[13px] text-ink-2">Viber alerts need the agency’s Viber bot on this server (VIBER_AUTH_TOKEN). Viber bots are a paid service from Rakuten Viber</p>;
+  const makeCode = async () => {
+    try { setCode((await api.post<{ code: string }>(`${path}/link`)).code); }
+    catch (err) { toast((err as Error).message, 'error'); }
+  };
+  const remove = async (id: string, name: string | null) => {
+    if (!window.confirm(`Stop sending Viber alerts to ${name || 'this person'}?`)) return;
+    await api.del(`${path}/${encodeURIComponent(id)}`).then(() => { toast('Removed'); reload(); }, (err) => toast(err.message, 'error'));
+  };
+  return (
+    <div className="space-y-3">
+      <p className="label !mb-0">Viber</p>
+      {data.subscribers.length ? (
+        <ul className="space-y-1">
+          {data.subscribers.map((p) => (
+            <li key={p.viber_id} className="flex items-center justify-between gap-3 text-[14px]">
+              <span>{p.name || 'Someone on Viber'} <span className="text-[12px] text-ink-3">since {ago(p.linked_at)}</span></span>
+              <button type="button" className="btn btn-glass btn-sm" onClick={() => remove(p.viber_id, p.name)}>Remove</button>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="text-[13px] text-ink-2">Nobody gets these alerts on Viber yet</p>}
+      {code ? (
+        <div className="rounded-[14px] bg-paper p-4 text-[13px]" role="status">
+          <p>Ask them to open the bot{data.bot_uri ? '' : ' in Viber'} and send this code within a day</p>
+          <p className="mt-2 text-[22px] font-light num">{code}</p>
+          {data.bot_uri && <a className="mt-2 inline-block underline underline-offset-2" href={`viber://pa?chatURI=${encodeURIComponent(data.bot_uri)}`}>Open the bot in Viber</a>}
+          <button type="button" className="mt-3 block text-[13px] text-ink-2 underline underline-offset-2" onClick={() => { setCode(null); reload(); }}>They have sent it</button>
+        </div>
+      ) : (
+        <button type="button" className="btn btn-glass btn-sm" onClick={makeCode}>Add someone on Viber</button>
+      )}
+    </div>
   );
 }

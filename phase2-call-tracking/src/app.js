@@ -23,6 +23,23 @@ app.set('trust proxy', process.env.TRUST_PROXY || 'loopback, uniquelocal');
 // MCP parses its own JSON body (before the global parsers touch it).
 app.use('/mcp', require('./mcp'));
 
+// Viber bot callbacks: the signature covers the raw body, so this reads it before any parser does.
+const viber = require('./services/viber');
+app.post('/webhooks/viber', express.raw({ type: '*/*', limit: '100kb' }), async (req, res) => {
+  if (!viber.enabled()) return res.status(404).end();
+  const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
+  if (!viber.validSignature(raw, req.get('X-Viber-Content-Signature') || req.query.sig)) return res.status(403).end();
+  let ev;
+  try { ev = JSON.parse(raw.toString('utf8')); } catch (e) { return res.status(400).end(); }
+  try {
+    const reply = await viber.onCallback(ev);
+    return reply ? res.json(reply) : res.status(200).end();
+  } catch (e) {
+    console.error('[viber]', String(e.message || e).slice(0, 160));
+    return res.status(200).end(); // answered; Viber would otherwise retry a message we already handled
+  }
+});
+
 // Twilio posts application/x-www-form-urlencoded; the snippet and the web app post JSON.
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
