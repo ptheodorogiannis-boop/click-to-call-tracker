@@ -5,7 +5,7 @@
  *   1) cp .env.example .env  (set VALIDATE_TWILIO_SIGNATURE=false for local sim)
  *   2) npm run seed
  *   3) npm start              (in another terminal)
- *   4) npm run simulate
+ *   4) npm run simulate   (with REPORT_API_KEY set in .env, or CTC_TOKEN=ct_… in the environment)
  *
  * It (a) requests a DNI number as a browser would, then (b) fakes the Twilio
  * incoming + dial-complete + recording webhooks for a call to that number, then
@@ -53,13 +53,14 @@ async function main() {
   console.log('\nLATEST CALL:', JSON.stringify({
     call_sid: c.call_sid, channel: c.channel, gclid: c.gclid, answered: c.answered,
     duration_sec: c.duration_sec, qualified: c.qualified, first_time: c.first_time,
-    recording_url: c.recording_url, conv_google: c.conv_google, conv_meta: c.conv_meta, conv_ga4: c.conv_ga4
+    has_recording: c.has_recording, region: c.region, conv_google: c.conv_google, conv_meta: c.conv_meta, conv_ga4: c.conv_ga4
   }, null, 2));
 
   // assertions
   const ok =
     c.channel === 'google_ads' && c.gclid === 'SIM_GCLID_123' &&
-    c.answered === 1 && c.qualified === 1 && c.first_time === 1 && c.duration_sec === 42;
+    !!c.answered && !!c.qualified && !!c.first_time && c.duration_sec === 42 &&
+    !!c.has_recording && c.region === 'mobile';
   console.log('\n' + (ok ? '✓ PASS — full attribution → call → qualify path works' : '✗ FAIL — see fields above'));
   process.exit(ok ? 0 : 1);
 }
@@ -73,6 +74,10 @@ async function postForm(path, obj) {
   const r = await fetch(BASE + path, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
   return r.text();
 }
-async function get(path) { return (await fetch(BASE + path)).json(); }
+// The report API is never open: send REPORT_API_KEY (or a ct_ token in CTC_TOKEN).
+async function get(path) {
+  const headers = process.env.CTC_TOKEN ? { Authorization: 'Bearer ' + process.env.CTC_TOKEN } : { 'X-Api-Key': process.env.REPORT_API_KEY || '' };
+  return (await fetch(BASE + path, { headers })).json();
+}
 
 main().catch((e) => { console.error(e); process.exit(1); });

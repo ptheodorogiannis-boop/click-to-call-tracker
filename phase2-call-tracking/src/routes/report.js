@@ -1,38 +1,56 @@
 'use strict';
+// The v1 report API, kept for Looker Studio / scripts. Needs either REPORT_API_KEY (X-Api-Key, sees every client)
+// or a personal Bearer ct_ token (sees that user's clients). With neither, it answers 401: it is never open.
 const express = require('express');
-const { q } = require('../db');
+const crypto = require('crypto');
+const calls = require('../calls');
+const { bearerUser } = require('../auth');
 
 const router = express.Router();
+const SYSTEM = { id: 0, role: 'owner', name: 'report key' };
 
-// Optional shared-secret guard for reporting endpoints.
-router.use((req, res, next) => {
+function keyOk(req) {
   const need = process.env.REPORT_API_KEY;
-  if (need && req.header('X-Api-Key') !== need) return res.status(401).json({ error: 'unauthorized' });
+  const got = req.header('X-Api-Key');
+  if (!need || !got) return false;
+  const a = crypto.createHash('sha256').update(need).digest();
+  const b = crypto.createHash('sha256').update(got).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
+router.use((req, res, next) => {
+  req.user = keyOk(req) ? SYSTEM : bearerUser(req);
+  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
   next();
 });
 
-function sinceParam(req) {
-  // default: last 30 days
-  const d = req.query.since || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-  return String(d).slice(0, 10) + ' 00:00:00';
+function since(req) {
+  return req.query.since || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 }
 
 // GET /api/report/calls?client=client-acme&since=2026-06-01&limit=500
-router.get('/calls', (req, res) => {
-  if (!req.query.client) return res.status(400).json({ error: 'client required' });
-  const rows = q.listCalls.all(req.query.client, sinceParam(req), parseInt(req.query.limit || '500', 10));
-  res.json({ client: req.query.client, count: rows.length, calls: rows });
+router.get('/calls', (req, res, next) => {
+  try {
+    if (!req.query.client) return res.status(400).json({ error: 'client required' });
+    const r = calls.listCalls(req.user, { client_id: req.query.client, since: since(req), limit: req.query.limit || 500 });
+    res.json({ client: req.query.client, count: r.calls.length, calls: r.calls });
+  } catch (e) { next(e); }
 });
 
 // GET /api/report/stats?client=client-acme&since=2026-06-01  → per-channel totals
-router.get('/stats', (req, res) => {
-  if (!req.query.client) return res.status(400).json({ error: 'client required' });
-  const byChannel = q.statsByChannel.all(req.query.client, sinceParam(req));
-  const totals = byChannel.reduce((t, r) => ({
-    total: t.total + r.total, answered: t.answered + r.answered,
-    missed: t.missed + r.missed, qualified: t.qualified + r.qualified, first_time: t.first_time + r.first_time
-  }), { total: 0, answered: 0, missed: 0, qualified: 0, first_time: 0 });
-  res.json({ client: req.query.client, totals, by_channel: byChannel });
+router.get('/stats', (req, res, next) => {
+  try {
+    if (!req.query.client) return res.status(400).json({ error: 'client required' });
+    calls.scopedClient(req.user, req.query.client);
+    const f = { client_id: req.query.client, since: since(req) };
+    const by = calls.byChannel(req.user, f).map((r) => ({ channel: r.channel, total: r.calls, answered: r.answered, missed: r.missed, qualified: r.leads }));
+    const t = calls.totals(req.user, f);
+    res.json({
+      client: req.query.client,
+      totals: { total: t.calls, answered: t.answered, missed: t.missed, qualified: t.leads, first_time: t.first_time },
+      by_channel: by
+    });
+  } catch (e) { next(e); }
 });
 
 module.exports = router;

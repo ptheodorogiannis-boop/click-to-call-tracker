@@ -6,6 +6,7 @@ const { validateTwilioSignature, buildConnectTwiml, buildHangupTwiml } = require
 const { normalizePhone } = require('../services/attribution');
 const { pushConversions } = require('../services/conversions');
 const { transcribe } = require('../services/transcription');
+const { regionForPhone } = require('../geo');
 
 const router = express.Router();
 router.use(validateTwilioSignature);
@@ -40,7 +41,8 @@ router.post('/incoming', (req, res) => {
     utm_source: session.utm_source || null, utm_medium: session.utm_medium || null,
     utm_campaign: session.utm_campaign || null, utm_content: session.utm_content || null, utm_term: session.utm_term || null,
     ga_client_id: session.ga_client_id || null, fbp: session.fbp || null, fbc: session.fbc || null,
-    landing_page: session.landing_page || null, referrer: session.referrer || null
+    landing_page: session.landing_page || null, referrer: session.referrer || null,
+    region: regionForPhone(caller)
   });
 
   res.type('text/xml').send(buildConnectTwiml(client, {

@@ -25,6 +25,18 @@ function ensureColumns() {
   add('clients', 'twilio_account_sid', 'twilio_account_sid TEXT');
   add('clients', 'twilio_auth_token', 'twilio_auth_token TEXT');
   add('clients', 'active', 'active INTEGER NOT NULL DEFAULT 1');
+  add('calls', 'lead_status', "lead_status TEXT NOT NULL DEFAULT 'new'");
+  add('calls', 'value', 'value REAL');
+  add('calls', 'called_back_at', 'called_back_at TEXT');
+  add('calls', 'called_back_by', 'called_back_by INTEGER');
+  if (!cols('calls').includes('region')) {
+    db.exec('ALTER TABLE calls ADD COLUMN region TEXT');
+    const { regionForPhone } = require('./geo');
+    const set = db.prepare('UPDATE calls SET region = ? WHERE call_sid = ?');
+    for (const c of db.prepare('SELECT call_sid, caller FROM calls WHERE caller IS NOT NULL').all()) {
+      set.run(regionForPhone(c.caller), c.call_sid);
+    }
+  }
 }
 
 // ── clients / numbers ──────────────────────────────────
@@ -90,10 +102,10 @@ const q = {
   insertCall: db.prepare(`
     INSERT INTO calls (call_sid,client_id,tracking_number,caller,status,first_time,session_id,channel,
       gclid,gbraid,wbraid,fbclid,msclkid,utm_source,utm_medium,utm_campaign,utm_content,utm_term,
-      ga_client_id,fbp,fbc,landing_page,referrer)
+      ga_client_id,fbp,fbc,landing_page,referrer,region)
     VALUES (@call_sid,@client_id,@tracking_number,@caller,@status,@first_time,@session_id,@channel,
       @gclid,@gbraid,@wbraid,@fbclid,@msclkid,@utm_source,@utm_medium,@utm_campaign,@utm_content,@utm_term,
-      @ga_client_id,@fbp,@fbc,@landing_page,@referrer)
+      @ga_client_id,@fbp,@fbc,@landing_page,@referrer,@region)
     ON CONFLICT(call_sid) DO NOTHING`),
   getCall: db.prepare('SELECT * FROM calls WHERE call_sid = ?'),
   updateCallStatus: db.prepare(

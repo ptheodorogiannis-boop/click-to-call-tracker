@@ -80,3 +80,51 @@ CREATE TABLE IF NOT EXISTS calls (
   conv_google TEXT, conv_meta TEXT, conv_ga4 TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_calls_client ON calls(client_id, started_at);
+-- v2 call columns (lead_status, value, called_back_at, called_back_by, region) are added in db.js ensureColumns.
+
+-- ── v2: people, access, lead work ─────────────────────
+-- login is an email, or a plain name for the bootstrap owner (ADMIN_USER, 'admin' by default).
+CREATE TABLE IF NOT EXISTS users (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  login          TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  name           TEXT NOT NULL,
+  password_hash  TEXT NOT NULL,
+  role           TEXT NOT NULL CHECK (role IN ('owner','member','client')),
+  active         INTEGER NOT NULL DEFAULT 1,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+  last_login_at  TEXT
+);
+
+-- Which clients a 'client' user may see. Owners and members see every client.
+CREATE TABLE IF NOT EXISTS user_clients (
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  client_id  TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, client_id)
+);
+
+-- Personal API tokens (REST + MCP). Only the SHA-256 is stored; the token is shown once.
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name          TEXT NOT NULL,
+  prefix        TEXT NOT NULL,                    -- first characters, to recognise a token in the list
+  token_hash    TEXT NOT NULL UNIQUE,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+  last_used_at  TEXT,
+  revoked_at    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS call_tags (
+  call_sid  TEXT NOT NULL REFERENCES calls(call_sid) ON DELETE CASCADE,
+  tag       TEXT NOT NULL,
+  PRIMARY KEY (call_sid, tag)
+);
+
+CREATE TABLE IF NOT EXISTS call_notes (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  call_sid    TEXT NOT NULL REFERENCES calls(call_sid) ON DELETE CASCADE,
+  user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  body        TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_call_notes_call ON call_notes(call_sid);
