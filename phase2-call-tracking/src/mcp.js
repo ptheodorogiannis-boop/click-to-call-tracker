@@ -31,14 +31,14 @@ function buildServer(user) {
   server.registerTool('whoami', {
     description: 'The user this token belongs to: name, role and which clients they can see.',
     annotations: read
-  }, run(() => ({ user: { name: user.name, login: user.login, role: user.role }, clients: calls.visibleClients(user).map((k) => ({ id: k.id, name: k.name })) })));
+  }, run(async () => ({ user: { name: user.name, login: user.login, role: user.role }, clients: (await calls.visibleClients(user)).map((k) => ({ id: k.id, name: k.name })) })));
 
   server.registerTool('list_clients', {
     description: 'Clients with their totals for a period (calls, answered, missed, leads, value, answer rate, calls to call back) and attention flags. Most other tools take a client_id from here.',
     inputSchema: { days: z.number().int().min(1).max(730).optional().describe('Period length ending today, default 30') },
     annotations: read
-  }, run(({ days }) => {
-    const b = calls.clientBoard(user, { days });
+  }, run(async ({ days }) => {
+    const b = await calls.clientBoard(user, { days });
     return { range: b.range, clients: b.clients.map(({ trend, ...rest }) => rest) };
   }));
 
@@ -49,13 +49,13 @@ function buildServer(user) {
       since: date.optional(), until: date.optional()
     },
     annotations: read
-  }, run((a) => { const o = calls.overview(user, a); delete o.daily; o.by_client = o.by_client.map(({ trend, ...rest }) => rest); return o; }));
+  }, run(async (a) => { const o = await calls.overview(user, a); delete o.daily; o.by_client = o.by_client.map(({ trend, ...rest }) => rest); return o; }));
 
   server.registerTool('get_report', {
     description: 'A client report for a period: totals and change, last 12 months by month, channels, campaigns, keywords, first-time vs repeat callers, regions.',
     inputSchema: { client_id: z.string().optional(), since: date.optional(), until: date.optional(), days: z.number().int().optional() },
     annotations: read
-  }, run((a) => { const r = calls.report(user, a); delete r.daily; return r; }));
+  }, run(async (a) => { const r = await calls.report(user, a); delete r.daily; return r; }));
 
   const filters = {
     client_id: z.string().optional(),
@@ -118,7 +118,7 @@ function buildServer(user) {
 const router = express.Router();
 
 router.post('/', express.json({ limit: '1mb' }), async (req, res) => {
-  const user = bearerUser(req);
+  const user = await bearerUser(req).catch(() => null);
   if (!user) {
     res.set('WWW-Authenticate', 'Bearer realm="ruler-calltrack"');
     return res.status(401).json({ jsonrpc: '2.0', error: { code: -32001, message: 'Send a personal API token: Authorization: Bearer ct_…' }, id: null });

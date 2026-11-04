@@ -17,9 +17,9 @@ function missedText(call, link) {
 }
 
 async function onCompleted(callSid) {
-  const call = calls.getCall(SYSTEM, callSid);
+  const call = await calls.getCall(SYSTEM, callSid);
   if (call.answered || call.status === 'blocked' || call.status === 'ringing' || !call.caller) return;
-  const client = q.getClient.get(call.client_id);
+  const client = await q.getClient.get(call.client_id);
   if (!client || !client.alert_missed) return;
   const link = `${cfg.publicBaseUrl}/calls?call=${encodeURIComponent(call.call_sid)}`;
   const text = missedText(call, link);
@@ -31,7 +31,7 @@ async function onCompleted(callSid) {
   }
   const to = mailer.parseEmails(client.alert_emails);
   if (to.length) jobs.push(mailer.send({ to, subject: `Missed call: ${client.name}`, text }));
-  if (viber.enabled() && viber.subscribers(client.id).length) jobs.push(viber.alert(client.id, text));
+  if (viber.enabled() && (await viber.subscribers(client.id)).length) jobs.push(viber.alert(client.id, text));
   const results = await Promise.allSettled(jobs);
   for (const r of results) if (r.status === 'rejected') console.error('[alerts]', callSid, String(r.reason).slice(0, 160));
 }

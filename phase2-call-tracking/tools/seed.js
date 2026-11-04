@@ -4,8 +4,7 @@
  * In production you'd add real Twilio numbers you purchased + assigned this server's
  * voice webhook (https://YOUR_BASE/webhooks/voice/incoming).
  */
-const { migrate, q } = require('../src/db');
-migrate();
+const { migrate, q, db } = require('../src/db');
 
 const client = {
   id: 'client-acme',
@@ -26,11 +25,14 @@ const client = {
     ga4: { measurementId: 'G-XXXX', apiSecret: 'xxxx' }
   })
 };
-q.upsertClient.run(client);
-
-// Demo pool — replace with real Twilio numbers.
-['+302100000001', '+302100000002', '+302100000003', '+302100000004'].forEach(function (phone, i) {
-  q.upsertNumber.run({ phone, client_id: client.id, label: 'pool-' + (i + 1), kind: 'pool', source: null });
-});
-
-console.log('seeded client', client.id, 'with 4 pool numbers');
+(async () => {
+  await migrate();
+  await q.upsertClient.run(client);
+  // Demo pool — replace with real Twilio numbers.
+  const pool = ['+302100000001', '+302100000002', '+302100000003', '+302100000004'];
+  for (const [i, phone] of pool.entries()) {
+    await q.upsertNumber.run({ phone, client_id: client.id, label: 'pool-' + (i + 1), kind: 'pool', source: null });
+  }
+  console.log('seeded client', client.id, 'with 4 pool numbers');
+  db.close();
+})().catch((e) => { console.error(e); process.exit(1); });

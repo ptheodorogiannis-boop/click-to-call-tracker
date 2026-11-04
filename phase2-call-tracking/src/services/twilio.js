@@ -6,10 +6,10 @@ const { q } = require('../db');
 const VoiceResponse = twilio.twiml.VoiceResponse;
 
 // Resolve which client a Twilio webhook belongs to (by AccountSid, then by called number).
-function resolveClient(req) {
+async function resolveClient(req) {
   const sid = req.body && req.body.AccountSid;
-  let client = sid ? q.clientByTwilioSid.get(sid) : null;
-  if (!client && req.body && req.body.To) client = q.clientByNumber.get(normalizeTo(req.body.To));
+  let client = sid ? await q.clientByTwilioSid.get(sid) : null;
+  if (!client && req.body && req.body.To) client = await q.clientByNumber.get(normalizeTo(req.body.To));
   return client || null;
 }
 function normalizeTo(to) {
@@ -23,7 +23,9 @@ function normalizeTo(to) {
  * Attaches req.ctcClient for downstream handlers.
  */
 function validateTwilioSignature(req, res, next) {
-  const client = resolveClient(req);
+  resolveClient(req).then((client) => check(client, req, res, next), next);
+}
+function check(client, req, res, next) {
   req.ctcClient = client;
 
   if (!cfg.twilio.validateSignature) return next();

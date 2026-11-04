@@ -12,6 +12,11 @@ function on(type, fn) {
   listeners.get(type).push(fn);
 }
 
+// On Vercel the function may stop once it has answered; waitUntil keeps it alive until these finish
+// (within the function's maxDuration). Elsewhere the process simply keeps running.
+let waitUntil = () => {};
+if (process.env.VERCEL) { try { ({ waitUntil } = require('@vercel/functions')); } catch (e) { /* not installed: best effort */ } }
+
 function emit(type, callSid) {
   for (const fn of listeners.get(type) || []) {
     const p = Promise.resolve()
@@ -19,7 +24,19 @@ function emit(type, callSid) {
       .catch((e) => console.error(`[events] ${type}`, callSid, String(e && e.stack ? e.stack : e).slice(0, 300)))
       .finally(() => pending.delete(p));
     pending.add(p);
+    try { waitUntil(p); } catch (e) { /* outside a request: nothing to extend */ }
   }
+}
+
+// Other work that finishes after the response (conversion uploads, transcription): kept alive the same way, and
+// awaited by settle().
+function background(work) {
+  const p = Promise.resolve(work)
+    .catch((e) => console.error('[background]', String(e && e.stack ? e.stack : e).slice(0, 300)))
+    .finally(() => pending.delete(p));
+  pending.add(p);
+  try { waitUntil(p); } catch (e) { /* outside a request */ }
+  return p;
 }
 
 // Wait until every listener started so far (and any they started) has finished.
@@ -27,4 +44,4 @@ async function settle() {
   while (pending.size) await Promise.all([...pending]);
 }
 
-module.exports = { on, emit, settle };
+module.exports = { on, emit, background, settle };

@@ -20,16 +20,19 @@ function verifyPassword(password, stored) {
   return crypto.timingSafeEqual(got, expected);
 }
 
+const SQL = {
+  insert: 'INSERT INTO users (login, name, password_hash, role) VALUES (@login, @name, @password_hash, @role)',
+  clearClients: 'DELETE FROM user_clients WHERE user_id = ?',
+  addClient: 'INSERT OR IGNORE INTO user_clients (user_id, client_id) VALUES (?, ?)'
+};
 const s = {
   byId: db.prepare('SELECT * FROM users WHERE id = ?'),
   byLogin: db.prepare('SELECT * FROM users WHERE login = ?'),
   list: db.prepare('SELECT id, login, name, role, active, created_at, last_login_at FROM users ORDER BY role, name'),
   count: db.prepare('SELECT COUNT(*) n FROM users'),
-  insert: db.prepare('INSERT INTO users (login, name, password_hash, role) VALUES (@login, @name, @password_hash, @role)'),
+  insert: db.prepare(SQL.insert),
   touchLogin: db.prepare("UPDATE users SET last_login_at = datetime('now') WHERE id = ?"),
   clientIds: db.prepare('SELECT client_id FROM user_clients WHERE user_id = ? ORDER BY client_id'),
-  clearClients: db.prepare('DELETE FROM user_clients WHERE user_id = ?'),
-  addClient: db.prepare('INSERT OR IGNORE INTO user_clients (user_id, client_id) VALUES (?, ?)'),
   tokenInsert: db.prepare('INSERT INTO api_tokens (user_id, name, prefix, token_hash) VALUES (?, ?, ?, ?)'),
   tokenByHash: db.prepare('SELECT * FROM api_tokens WHERE token_hash = ? AND revoked_at IS NULL'),
   tokenTouch: db.prepare("UPDATE api_tokens SET last_used_at = datetime('now') WHERE id = ?"),
@@ -38,74 +41,74 @@ const s = {
 };
 
 // The shape the rest of the app sees: never the password hash.
-function publicUser(u) {
+async function publicUser(u) {
   if (!u) return null;
   return {
     id: u.id, login: u.login, name: u.name, role: u.role, active: !!u.active,
     created_at: u.created_at, last_login_at: u.last_login_at,
-    client_ids: u.role === 'client' ? s.clientIds.all(u.id).map((r) => r.client_id) : null
+    client_ids: u.role === 'client' ? (await s.clientIds.all(u.id)).map((r) => r.client_id) : null
   };
 }
 
-function getUser(id) {
-  const u = s.byId.get(id);
+async function getUser(id) {
+  const u = await s.byId.get(id);
   return u && u.active ? publicUser(u) : null;
 }
 
-function login(loginName, password) {
-  const u = s.byLogin.get(String(loginName || '').trim());
+async function login(loginName, password) {
+  const u = await s.byLogin.get(String(loginName || '').trim());
   if (!u || !u.active || !verifyPassword(password || '', u.password_hash)) return null;
-  s.touchLogin.run(u.id);
+  await s.touchLogin.run(u.id);
   return publicUser(u);
 }
 
-function listUsers() { return s.list.all().map((u) => publicUser(u)); }
+async function listUsers() { return Promise.all((await s.list.all()).map((u) => publicUser(u))); }
 
-function createUser({ login: loginName, name, password, role, client_ids }) {
+async function setClients(t, userId, clientIds) {
+  await t.prepare(SQL.clearClients).run(userId);
+  for (const c of clientIds || []) await t.prepare(SQL.addClient).run(userId, c);
+}
+
+async function createUser({ login: loginName, name, password, role, client_ids }) {
   if (!ROLES.includes(role)) throw new Error('role must be owner, member or client');
   if (!loginName || !password || String(password).length < 10) throw new Error('login and a password of at least 10 characters are required');
-  const id = db.transaction(() => {
-    const r = s.insert.run({ login: String(loginName).trim(), name: name || loginName, password_hash: hashPassword(password), role });
-    setClients(r.lastInsertRowid, role === 'client' ? client_ids : []);
+  const id = await db.tx(async (t) => {
+    const r = await t.prepare(SQL.insert).run({ login: String(loginName).trim(), name: name || loginName, password_hash: hashPassword(password), role });
+    await setClients(t, r.lastInsertRowid, role === 'client' ? client_ids : []);
     return r.lastInsertRowid;
-  })();
+  });
   return getUser(id);
 }
 
-function updateUser(id, { name, role, active, password, client_ids }) {
-  const u = s.byId.get(id);
+async function updateUser(id, { name, role, active, password, client_ids }) {
+  const u = await s.byId.get(id);
   if (!u) return null;
   if (role && !ROLES.includes(role)) throw new Error('role must be owner, member or client');
   if (password && String(password).length < 10) throw new Error('password must be at least 10 characters');
-  db.transaction(() => {
-    db.prepare('UPDATE users SET name = ?, role = ?, active = ?, password_hash = ? WHERE id = ?').run(
+  await db.tx(async (t) => {
+    await t.prepare('UPDATE users SET name = ?, role = ?, active = ?, password_hash = ? WHERE id = ?').run(
       name ?? u.name, role ?? u.role, active == null ? u.active : (active ? 1 : 0),
       password ? hashPassword(password) : u.password_hash, id);
     const nextRole = role ?? u.role;
-    if (nextRole !== 'client') setClients(id, []);
-    else if (client_ids) setClients(id, client_ids);
-  })();
-  return publicUser(s.byId.get(id));
+    if (nextRole !== 'client') await setClients(t, id, []);
+    else if (client_ids) await setClients(t, id, client_ids);
+  });
+  return publicUser(await s.byId.get(id));
 }
 
 // A person changing their own password must know the current one.
-function changePassword(userId, current, next) {
-  const u = s.byId.get(userId);
+async function changePassword(userId, current, next) {
+  const u = await s.byId.get(userId);
   if (!u || !verifyPassword(current || '', u.password_hash)) return 'wrong';
   if (!next || String(next).length < 10) return 'short';
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(next), userId);
+  await db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(next), userId);
   return 'ok';
 }
 
-function setClients(userId, clientIds) {
-  s.clearClients.run(userId);
-  for (const c of clientIds || []) s.addClient.run(userId, c);
-}
-
 // Keeps existing deployments signing in: the first boot of v2 turns ADMIN_USER / ADMIN_PASSWORD into the owner.
-function bootstrapOwner() {
-  if (s.count.get().n > 0 || !cfg.admin.password) return null;
-  const r = s.insert.run({ login: cfg.admin.user, name: cfg.admin.user, password_hash: hashPassword(cfg.admin.password), role: 'owner' });
+async function bootstrapOwner() {
+  if ((await s.count.get()).n > 0 || !cfg.admin.password) return null;
+  const r = await s.insert.run({ login: cfg.admin.user, name: cfg.admin.user, password_hash: hashPassword(cfg.admin.password), role: 'owner' });
   return getUser(r.lastInsertRowid);
 }
 
@@ -119,21 +122,21 @@ const isOwner = (user) => user.role === 'owner';
 // ── API tokens ─────────────────────────────────────────
 const sha = (t) => crypto.createHash('sha256').update(t).digest('hex');
 
-function createToken(userId, name) {
+async function createToken(userId, name) {
   const token = 'ct_' + crypto.randomBytes(24).toString('base64url');
-  const r = s.tokenInsert.run(userId, String(name || 'Token').slice(0, 60), token.slice(0, 7), sha(token));
+  const r = await s.tokenInsert.run(userId, String(name || 'Token').slice(0, 60), token.slice(0, 7), sha(token));
   return { id: r.lastInsertRowid, token };
 }
-function userForToken(token) {
+async function userForToken(token) {
   if (!token || !String(token).startsWith('ct_')) return null;
-  const row = s.tokenByHash.get(sha(String(token)));
+  const row = await s.tokenByHash.get(sha(String(token)));
   if (!row) return null;
-  const u = getUser(row.user_id);
-  if (u) s.tokenTouch.run(row.id);
+  const u = await getUser(row.user_id);
+  if (u) await s.tokenTouch.run(row.id);
   return u;
 }
 const listTokens = (userId) => s.tokenList.all(userId);
-const revokeToken = (userId, id) => s.tokenRevoke.run(id, userId).changes > 0;
+const revokeToken = async (userId, id) => (await s.tokenRevoke.run(id, userId)).changes > 0;
 
 module.exports = {
   ROLES, hashPassword, verifyPassword, getUser, login, listUsers, createUser, updateUser, bootstrapOwner, changePassword,

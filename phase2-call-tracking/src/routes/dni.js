@@ -20,14 +20,15 @@ router.use((req, res, next) => {
  * → { phone, sessionId, fallback } | { error }
  * The browser swaps the displayed number to `phone`.
  */
-router.post('/assign', (req, res) => {
+router.post('/assign', (req, res, next) => assign(req, res).catch(next));
+async function assign(req, res) {
   const { siteId, attribution, visitorId } = req.body || {};
   if (!siteId) return res.status(400).json({ error: 'siteId required' });
 
-  const client = q.getClient.get(siteId);
+  const client = await q.getClient.get(siteId);
   if (!client) return res.status(404).json({ error: 'unknown siteId' });
 
-  const result = assignNumber(siteId, attribution || {}, {
+  const result = await assignNumber(siteId, attribution || {}, {
     visitorId,
     userAgent: req.header('User-Agent'),
     ip: req.header('X-Forwarded-For') || req.ip
@@ -35,6 +36,6 @@ router.post('/assign', (req, res) => {
   if (!result) return res.status(409).json({ error: 'no numbers in pool for this client' });
 
   res.json(result);
-});
+}
 
 module.exports = router;

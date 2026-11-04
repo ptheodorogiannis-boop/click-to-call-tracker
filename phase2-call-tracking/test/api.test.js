@@ -5,9 +5,9 @@ const { seed, start, session } = require('./helpers');
 const users = require('../src/users');
 const { db } = require('../src/db');
 
-const people = seed();
+let people;
 let srv;
-test.before(async () => { srv = await start(); });
+test.before(async () => { people = await seed(); srv = await start(); });
 test.after(() => srv.close());
 
 test('everything under /api/v2 needs a session', async () => {
@@ -77,7 +77,7 @@ test('the v1 report API is closed without a key or token, and tokens are scoped'
   assert.equal((await anon.get('/api/report/calls?client=acme')).status, 401);
   assert.equal((await anon.get('/api/report/calls?client=acme', { 'X-Api-Key': 'wrong' })).status, 401);
   assert.equal((await anon.get('/api/report/stats?client=beta', { 'X-Api-Key': 'test-report-key' })).status, 200);
-  const { token } = users.createToken(people.client.id, 'looker');
+  const { token } = await users.createToken(people.client.id, 'looker');
   const auth = { Authorization: 'Bearer ' + token };
   assert.equal((await anon.get('/api/report/calls?client=acme', auth)).status, 200);
   assert.equal((await anon.get('/api/report/calls?client=beta', auth)).status, 404);
@@ -121,9 +121,9 @@ test('the brake counts each visitor behind the proxy apart, not the proxy', asyn
 });
 
 test('CSV export has every call in the period, past 500', async () => {
-  const ins = db.prepare(`INSERT INTO calls (call_sid, client_id, tracking_number, caller, started_at, answered, status, channel)
+  const INS = (`INSERT INTO calls (call_sid, client_id, tracking_number, caller, started_at, answered, status, channel)
     VALUES (?, 'beta', '+302100000001', '+306970000000', datetime('now', '-2 days'), 1, 'answered', 'direct')`);
-  db.transaction(() => { for (let i = 0; i < 520; i++) ins.run('CSVBULK' + i); })();
+  await db.tx(async (t) => { for (let i = 0; i < 520; i++) await t.prepare(INS).run('CSVBULK' + i); });
   const s = session(srv.base);
   // its own address: the brake tests above have used up 127.0.0.1
   await s.post('/api/v2/auth/login', { login: 'admin', password: 'admin-password-123' }, { 'X-Forwarded-For': '192.0.2.50' });

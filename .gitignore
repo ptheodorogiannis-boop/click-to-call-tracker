@@ -23,3 +23,10 @@ Thumbs.db
 # Built web app (npm run build) and Hallmark run files
 phase2-call-tracking/web/dist/
 .hallmark/
+
+# Vercel build output (tools/vercel-prepare.js)
+phase2-call-tracking/src/generated/
+phase2-call-tracking/public/index.html
+phase2-call-tracking/public/assets/
+phase2-call-tracking/public/static/
+phase2-call-tracking/public/favicon.svg

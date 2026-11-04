@@ -11,11 +11,13 @@ if (!process.env.DB_PATH || /calls\.db$/.test(process.env.DB_PATH)) {
   process.exit(1);
 }
 process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'demo-password-1';
-const { db } = require('../src/db');
+const { db, migrate } = require('../src/db');
 const users = require('../src/users');
 const { regionForPhone } = require('../src/geo');
 
-if (db.prepare('SELECT COUNT(*) n FROM calls').get().n > 0) {
+async function main() {
+await migrate();
+if ((await db.prepare('SELECT COUNT(*) n FROM calls').get()).n > 0) {
   console.error('This database already has calls. Point DB_PATH at a new file.');
   process.exit(1);
 }
@@ -42,25 +44,25 @@ const TRANSCRIPTS = [
   'I would like to know if you can come and measure the space this Saturday.'
 ];
 
-const insClient = db.prepare(`INSERT INTO clients (id, name, forward_number, lead_value, currency, recording_enabled, qualified_duration_sec, config_json)
+const insClient = (`INSERT INTO clients (id, name, forward_number, lead_value, currency, recording_enabled, qualified_duration_sec, config_json)
   VALUES (?, ?, ?, ?, 'EUR', 1, 30, '{}')`);
-const insNumber = db.prepare('INSERT INTO numbers (phone, client_id, label) VALUES (?, ?, ?)');
-const insCall = db.prepare(`INSERT INTO calls (call_sid, client_id, tracking_number, caller, started_at, answered, status, duration_sec,
+const insNumber = ('INSERT INTO numbers (phone, client_id, label) VALUES (?, ?, ?)');
+const insCall = (`INSERT INTO calls (call_sid, client_id, tracking_number, caller, started_at, answered, status, duration_sec,
     qualified, first_time, channel, utm_source, utm_medium, utm_campaign, utm_term, landing_page, gclid, fbclid, region, lead_status, value, transcript, called_back_at)
   VALUES (@sid, @client, @tracking, @caller, @at, @answered, @status, @dur, @q, @first, @channel, @src, @med, @campaign, @term, @landing, @gclid, @fbclid, @region, @lead, @value, @transcript, @called_back)`);
-const insTag = db.prepare('INSERT OR IGNORE INTO call_tags (call_sid, tag) VALUES (?, ?)');
-const insNote = db.prepare('INSERT INTO call_notes (call_sid, user_id, body, created_at) VALUES (?, ?, ?, ?)');
+const insTag = ('INSERT OR IGNORE INTO call_tags (call_sid, tag) VALUES (?, ?)');
+const insNote = ('INSERT INTO call_notes (call_sid, user_id, body, created_at) VALUES (?, ?, ?, ?)');
 
-const owner = users.bootstrapOwner();
-const member = users.createUser({ login: 'maria@ruler.demo', name: 'Maria Papadaki', password: 'demo-password-1', role: 'member' });
+const owner = await users.bootstrapOwner();
+const member = await users.createUser({ login: 'maria@ruler.demo', name: 'Maria Papadaki', password: 'demo-password-1', role: 'member' });
 
 const now = Date.now();
 let n = 0;
-db.transaction(() => {
+await db.tx(async (t) => {
   for (const c of CLIENTS) {
-    insClient.run(c.id, c.name, c.fwd, c.value);
+    await t.prepare(insClient).run(c.id, c.name, c.fwd, c.value);
     const pool = [1, 2, 3, 4].map((i) => `+30${c.fwd.slice(3, 6)}99${CLIENTS.indexOf(c)}000${i}`);
-    pool.forEach((p, i) => insNumber.run(p, c.id, `Pool ${i + 1}`));
+    for (const [i, p] of pool.entries()) await t.prepare(insNumber).run(p, c.id, `Pool ${i + 1}`);
     const seen = new Set();
     for (let day = 400; day >= 0; day--) {
       const season = c.id === 'aegean-villas' ? 0.4 + Math.max(0, Math.sin(((day + 90) / 365) * Math.PI * 2)) : 1;
@@ -84,7 +86,7 @@ db.transaction(() => {
         const lead = answered && dur >= 30 ? weighted([['new', 70], ['good', 18], ['customer', 6], ['not_lead', 5], ['spam', 1]]) : (answered ? weighted([['new', 90], ['spam', 6], ['not_lead', 4]]) : 'new');
         const sid = 'CA' + (++n).toString(16).padStart(30, '0');
         const recent = day <= 10;
-        insCall.run({
+        await t.prepare(insCall).run({
           sid, client: c.id, tracking: pick(pool), caller, at: at.toISOString().slice(0, 19).replace('T', ' '),
           answered, status: answered ? 'answered' : 'missed', dur, q: answered && dur >= 30 ? 1 : 0, first: seen.has(caller) ? 0 : 1,
           channel, src: channel.startsWith('google') ? 'google' : channel.startsWith('meta') ? 'facebook' : channel === 'microsoft_ads' ? 'bing' : null,
@@ -97,13 +99,16 @@ db.transaction(() => {
           called_back: !answered && !recent && rnd() < 0.7 ? at.toISOString().slice(0, 19).replace('T', ' ') : null
         });
         seen.add(caller);
-        if (lead === 'customer') insTag.run(sid, 'booked');
-        if (lead === 'good' && rnd() < 0.4) insTag.run(sid, pick(['quote sent', 'call again', 'price question']));
-        if (lead === 'customer' && rnd() < 0.5) insNote.run(sid, member.id, pick(['Booked for next week.', 'Sent the quote by email, accepted.', 'Came in on Saturday, paid the deposit.']), at.toISOString().slice(0, 19).replace('T', ' '));
+        if (lead === 'customer') await t.prepare(insTag).run(sid, 'booked');
+        if (lead === 'good' && rnd() < 0.4) await t.prepare(insTag).run(sid, pick(['quote sent', 'call again', 'price question']));
+        if (lead === 'customer' && rnd() < 0.5) await t.prepare(insNote).run(sid, member.id, pick(['Booked for next week.', 'Sent the quote by email, accepted.', 'Came in on Saturday, paid the deposit.']), at.toISOString().slice(0, 19).replace('T', ' '));
       }
     }
   }
-})();
+});
 
-users.createUser({ login: 'lyra@client.demo', name: 'Lyra Dental reception', password: 'demo-password-1', role: 'client', client_ids: ['lyra-dental'] });
+await users.createUser({ login: 'lyra@client.demo', name: 'Lyra Dental reception', password: 'demo-password-1', role: 'client', client_ids: ['lyra-dental'] });
 console.log(`demo: ${CLIENTS.length} clients, ${n} calls in ${process.env.DB_PATH}; owner "${owner.login}", member maria@ruler.demo, client lyra@client.demo (demo-password-1)`);
+db.close();
+}
+main().catch((e) => { console.error(e); process.exit(1); });

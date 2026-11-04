@@ -30,7 +30,7 @@ function readCookie(req) {
 }
 
 // The user is looked up on every request, so a deactivated user or a changed role takes effect at once.
-function getSessionUser(req) {
+async function getSessionUser(req) {
   if (!cfg.admin.sessionSecret) return null;
   const token = readCookie(req);
   if (!token) return null;
@@ -45,16 +45,17 @@ function getSessionUser(req) {
   } catch (e) { return null; }
 }
 
-function bearerUser(req) {
+async function bearerUser(req) {
   const m = (req.headers.authorization || '').match(/^Bearer\s+(\S+)$/i);
   return m ? users.userForToken(m[1]) : null;
 }
 
 function requireUser(req, res, next) {
-  const user = getSessionUser(req) || bearerUser(req);
-  if (!user) return res.status(401).json({ error: 'unauthorized' });
-  req.user = user;
-  next();
+  (async () => (await getSessionUser(req)) || (await bearerUser(req)))().then((user) => {
+    if (!user) return res.status(401).json({ error: 'unauthorized' });
+    req.user = user;
+    next();
+  }, next);
 }
 function requireEdit(req, res, next) {
   if (!users.canEdit(req.user)) return res.status(403).json({ error: 'forbidden' });

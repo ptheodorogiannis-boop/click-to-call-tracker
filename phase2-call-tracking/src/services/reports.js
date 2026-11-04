@@ -78,12 +78,12 @@ function html(r, period) {
 }
 
 async function sendReport(clientId, period) {
-  const k = db.prepare('SELECT * FROM clients WHERE id = ?').get(clientId);
+  const k = await db.prepare('SELECT * FROM clients WHERE id = ?').get(clientId);
   if (!k) return { skipped: 'no such client' };
   const to = mailer.parseEmails(k.report_emails);
   if (!to.length) return { skipped: 'no report recipients' };
-  const r = calls.report(SYSTEM, { client_id: clientId, since: period.since, until: period.until });
-  const csv = '﻿' + calls.toCsv(SYSTEM, { client_id: clientId, since: period.since, until: period.until });
+  const r = await calls.report(SYSTEM, { client_id: clientId, since: period.since, until: period.until });
+  const csv = '﻿' + await calls.toCsv(SYSTEM, { client_id: clientId, since: period.since, until: period.until });
   return mailer.send({
     to,
     subject: `${k.name}: calls ${period.since} to ${period.until}`,
@@ -95,22 +95,22 @@ async function sendReport(clientId, period) {
 
 // Send every report that is due, then move each one to its next time. Safe to call often.
 async function runDue(now = new Date()) {
-  const due = db.prepare(`SELECT id, report_schedule, report_next_at FROM clients
+  const due = await db.prepare(`SELECT id, report_schedule, report_next_at FROM clients
     WHERE active = 1 AND report_schedule != 'off' AND report_next_at IS NOT NULL AND report_next_at <= ?`).all(sqlTime(now));
   const results = [];
   for (const k of due) {
     const at = new Date(k.report_next_at.replace(' ', 'T') + 'Z');
     const r = await sendReport(k.id, periodFor(k.report_schedule, at)).catch((e) => ({ error: String(e.message || e) }));
-    db.prepare('UPDATE clients SET report_next_at = ? WHERE id = ?').run(sqlTime(nextAt(k.report_schedule, now)), k.id);
+    await db.prepare('UPDATE clients SET report_next_at = ? WHERE id = ?').run(sqlTime(nextAt(k.report_schedule, now)), k.id);
     results.push({ client: k.id, ...r });
   }
   return results;
 }
 
 // When a schedule is saved: set (or clear) the next send time.
-function schedule(clientId, sched) {
+async function schedule(clientId, sched) {
   const next = nextAt(sched);
-  db.prepare('UPDATE clients SET report_schedule = ?, report_next_at = ? WHERE id = ?').run(sched, next ? sqlTime(next) : null, clientId);
+  await db.prepare('UPDATE clients SET report_schedule = ?, report_next_at = ? WHERE id = ?').run(sched, next ? sqlTime(next) : null, clientId);
 }
 
 module.exports = { SCHEDULES, nextAt, periodFor, sendReport, runDue, schedule };

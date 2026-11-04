@@ -7,9 +7,9 @@ const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/cli
 const { seed, start } = require('./helpers');
 const users = require('../src/users');
 
-const people = seed();
+let people;
 let srv;
-test.before(async () => { srv = await start(); });
+test.before(async () => { people = await seed(); srv = await start(); });
 test.after(() => srv.close());
 
 async function connect(token) {
@@ -28,7 +28,7 @@ test('no token, no MCP', async () => {
 });
 
 test('a member gets read and write tools and can work a lead', async () => {
-  const c = await connect(users.createToken(people.member.id, 'claude').token);
+  const c = await connect((await users.createToken(people.member.id, 'claude')).token);
   const names = (await c.listTools()).tools.map((t) => t.name).sort();
   assert.deepEqual(names, ['add_note', 'calls_to_call_back', 'get_call', 'get_overview', 'get_report', 'list_calls',
     'list_clients', 'mark_called_back', 'search_calls', 'set_lead_status', 'tag_call', 'whoami']);
@@ -48,7 +48,7 @@ test('a member gets read and write tools and can work a lead', async () => {
 });
 
 test('a client token reads its own client only and has no write tools', async () => {
-  const c = await connect(users.createToken(people.client.id, 'portal').token);
+  const c = await connect((await users.createToken(people.client.id, 'portal')).token);
   const names = (await c.listTools()).tools.map((t) => t.name);
   assert.ok(!names.includes('set_lead_status') && !names.includes('add_note') && !names.includes('tag_call'));
 
@@ -68,7 +68,7 @@ test('a client token reads its own client only and has no write tools', async ()
 });
 
 test('overview through MCP matches the scope', async () => {
-  const c = await connect(users.createToken(people.client.id, 'portal2').token);
+  const c = await connect((await users.createToken(people.client.id, 'portal2')).token);
   const o = data(await c.callTool({ name: 'get_overview', arguments: { days: 30 } }));
   assert.equal(o.by_client.length, 1);
   assert.equal(o.totals.calls, 5);

@@ -12,13 +12,14 @@ const users = require('../src/users');
 const mailer = require('../src/services/mailer');
 const reports = require('../src/services/reports');
 
-const people = seed();
+let people;
 let srv;
 let receiver;          // a local HTTP endpoint standing in for webhook receivers, Slack and the Anthropic API
 const received = [];   // { path, headers, body }
 let anthropicReply = null;
 
 test.before(async () => {
+  people = await seed();
   srv = await start();
   receiver = http.createServer((req, res) => {
     let body = '';
@@ -49,7 +50,7 @@ const sid = () => 'CAW2' + (++n);
 
 test('a blocked caller is turned away, logged as spam, and kept out of the counts', async () => {
   const s = await owner();
-  const before = calls.totals(people.owner, { client_id: 'acme' }).calls;
+  const before = (await calls.totals(people.owner, { client_id: 'acme' })).calls;
   const r = await s.post('/api/v2/clients/acme/blocked', { pattern: '+30690 *', note: 'robocalls' });
   assert.equal(r.status, 200);
   assert.equal(r.body.blocked[0].pattern, '+30690*');
@@ -59,12 +60,12 @@ test('a blocked caller is turned away, logged as spam, and kept out of the count
   const twiml = await form('/webhooks/voice/incoming', { To: '+302100000001', From: '+306901234567', CallSid: callSid });
   assert.match(twiml, /<Reject/);
   await events.settle();
-  const c = calls.getCall(people.owner, callSid);
+  const c = await calls.getCall(people.owner, callSid);
   assert.equal(c.status, 'blocked');
   assert.equal(c.lead_status, 'spam');
-  assert.equal(calls.totals(people.owner, { client_id: 'acme' }).calls, before, 'not counted');
-  assert.equal(calls.listCalls(people.owner, { status: 'blocked' }).total, 1, 'but listed under Blocked');
-  assert.ok(!calls.listCalls(people.owner, { status: 'to_call_back' }).calls.some((x) => x.call_sid === callSid));
+  assert.equal((await calls.totals(people.owner, { client_id: 'acme' })).calls, before, 'not counted');
+  assert.equal((await calls.listCalls(people.owner, { status: 'blocked' })).total, 1, 'but listed under Blocked');
+  assert.ok(!(await calls.listCalls(people.owner, { status: 'to_call_back' })).calls.some((x) => x.call_sid === callSid));
   assert.equal((await s.get('/api/v2/clients/acme/blocked')).body.blocked[0].blocked_calls, 1);
 });
 
@@ -73,7 +74,7 @@ test('blocking from a call adds the caller and marks the call spam; clients cann
   const r = await s.post('/api/v2/calls/CA2/block', {});
   assert.equal(r.status, 200);
   assert.equal(r.body.call.lead_status, 'spam');
-  assert.ok(calls.isBlocked('acme', '+306971111111'));
+  assert.ok(await calls.isBlocked('acme', '+306971111111'));
   const c = session(srv.base);
   await c.post('/api/v2/auth/login', { login: 'acme@client.gr', password: 'client-password-1' }, { 'X-Forwarded-For': '198.18.1.1' });
   assert.equal((await c.post('/api/v2/calls/CA1/block', {})).status, 403);
@@ -90,7 +91,7 @@ test('a fixed number carries its own source and is never handed to a website vis
   }
   const callSid = sid();
   await form('/webhooks/voice/incoming', { To: '+302100000099', From: '+302105550000', CallSid: callSid });
-  const c = calls.getCall(people.owner, callSid);
+  const c = await calls.getCall(people.owner, callSid);
   assert.equal(c.channel, 'google_business');
   assert.equal(c.utm_campaign, 'Google listing');
 });
@@ -131,7 +132,7 @@ test('webhooks: signed deliveries on completion and on lead work, retries, then 
   await s.patch('/api/v2/calls/CB1', { lead_status: 'good' });
   await events.settle();
   assert.equal(received.filter((r) => r.path === '/fail').length, 3, 'three tries');
-  const row = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(bad.body.webhook.id);
+  const row = await db.prepare('SELECT * FROM webhooks WHERE id = ?').get(bad.body.webhook.id);
   assert.equal(row.failures, 1);
   assert.match(row.last_status, /^500/);
   assert.ok(!received.some((r) => r.path === '/hook'), 'the acme hook does not hear about beta');
@@ -143,7 +144,7 @@ test('missed-call alerts go to Slack and email when switched on', async () => {
   assert.equal(r.status, 200);
   assert.equal(r.body.client.alert_emails, 'desk@beta.gr');
   assert.match(r.body.client.alert_slack_url_masked, /^••••/);
-  db.prepare("INSERT OR IGNORE INTO numbers (phone, client_id, label) VALUES ('+302310000001', 'beta', 'pool')").run();
+  await db.prepare("INSERT OR IGNORE INTO numbers (phone, client_id, label) VALUES ('+302310000001', 'beta', 'pool')").run();
   received.length = 0;
   mailer.sent.length = 0;
 
@@ -166,13 +167,13 @@ test('missed-call alerts go to Slack and email when switched on', async () => {
 
 test('health flags: a full pool and failing uploads show on the client board', async () => {
   // beta has one pool number: the second visitor in the same hour shares it, and that is recorded
-  db.prepare("DELETE FROM sessions WHERE client_id = 'beta'").run();
+  await db.prepare("DELETE FROM sessions WHERE client_id = 'beta'").run();
   const assign = () => fetch(srv.base + '/api/dni/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteId: 'beta', attribution: {} }) }).then((r) => r.json());
   assert.equal((await assign()).fallback, false);
   assert.equal((await assign()).fallback, true);
-  assert.ok(calls.clientBoard(people.owner, {}).clients.find((k) => k.id === 'beta').flags.includes('pool_full'));
-  db.prepare(`UPDATE calls SET conv_google = 'error: invalid gclid' WHERE call_sid = 'CA1'`).run();
-  const row = calls.clientBoard(people.owner, {}).clients.find((k) => k.id === 'acme');
+  assert.ok((await calls.clientBoard(people.owner, {})).clients.find((k) => k.id === 'beta').flags.includes('pool_full'));
+  await db.prepare(`UPDATE calls SET conv_google = 'error: invalid gclid' WHERE call_sid = 'CA1'`).run();
+  const row = (await calls.clientBoard(people.owner, {})).clients.find((k) => k.id === 'acme');
   assert.ok(row.flags.includes('uploads_failing'));
 });
 
@@ -182,10 +183,10 @@ test('passwords: change your own with the current one; owners reset others', asy
   assert.equal((await m.post('/api/v2/me/password', { current: 'nope', next: 'brand-new-password' })).status, 400);
   assert.equal((await m.post('/api/v2/me/password', { current: 'member-password-1', next: 'short' })).status, 400);
   assert.equal((await m.post('/api/v2/me/password', { current: 'member-password-1', next: 'brand-new-password' })).status, 200);
-  assert.ok(users.login('maria@ruler.agency', 'brand-new-password'));
+  assert.ok(await users.login('maria@ruler.agency', 'brand-new-password'));
   const s = await owner();
   assert.equal((await s.patch('/api/v2/users/' + people.member.id, { password: 'reset-by-the-owner' })).status, 200);
-  assert.ok(users.login('maria@ruler.agency', 'reset-by-the-owner'));
+  assert.ok(await users.login('maria@ruler.agency', 'reset-by-the-owner'));
 });
 
 test('AI summaries: the request asks for structured output with fallbacks; the answer is stored as a suggestion', async () => {
@@ -203,7 +204,7 @@ test('AI summaries: the request asks for structured output with fallbacks; the a
   assert.equal(r.body.call.ai_summary, 'Ζήτησε προσφορά για κουζίνα.');
   assert.equal(r.body.call.ai_label, 'good');
   assert.equal(r.body.call.ai_score, 82);
-  assert.equal(r.body.call.lead_status, calls.getCall(people.owner, 'CA1').lead_status, 'a suggestion only');
+  assert.equal(r.body.call.lead_status, (await calls.getCall(people.owner, 'CA1')).lead_status, 'a suggestion only');
 
   const sent = received.find((x) => x.path.startsWith('/v1/messages'));
   const body = JSON.parse(sent.body);
@@ -228,7 +229,7 @@ test('reports: schedule times, periods, and a due report is emailed with the cal
 
   const s = await owner();
   await s.post('/api/v2/clients', { id: 'acme', name: 'ACME Greece', forward_number: '+302101111111', report_schedule: 'weekly', report_emails: 'owner@acme.gr' });
-  db.prepare("UPDATE clients SET report_next_at = datetime('now', '-1 minute') WHERE id = 'acme'").run();
+  await db.prepare("UPDATE clients SET report_next_at = datetime('now', '-1 minute') WHERE id = 'acme'").run();
   mailer.sent.length = 0;
   const out = await reports.runDue();
   assert.equal(out.length, 1);
@@ -237,7 +238,7 @@ test('reports: schedule times, periods, and a due report is emailed with the cal
   assert.match(mail.subject, /^ACME Greece: calls /);
   assert.equal(mail.attachments.length, 1);
   assert.match(mail.attachments[0].filename, /^calls-acme-/);
-  const next = db.prepare("SELECT report_next_at FROM clients WHERE id = 'acme'").get().report_next_at;
+  const next = (await db.prepare("SELECT report_next_at FROM clients WHERE id = 'acme'").get()).report_next_at;
   assert.ok(next > new Date().toISOString().slice(0, 19).replace('T', ' '), 'moved to the next send time');
   assert.equal((await reports.runDue()).length, 0, 'not sent twice');
 });

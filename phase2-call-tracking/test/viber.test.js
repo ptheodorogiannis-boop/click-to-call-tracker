@@ -8,7 +8,6 @@ const { seed, start, session } = require('./helpers');
 const { db } = require('../src/db');
 const events = require('../src/events');
 
-seed();
 let srv;
 let viberApi;
 const sent = []; // what the app sent to the Viber API
@@ -26,6 +25,7 @@ test.before(async () => {
   await new Promise((r) => viberApi.listen(0, r));
   process.env.VIBER_AUTH_TOKEN = 'viber-test-token';
   process.env.VIBER_API_BASE = `http://127.0.0.1:${viberApi.address().port}/pa`;
+  await seed();
   srv = await start();
 });
 test.after(async () => {
@@ -96,7 +96,7 @@ test('unsubscribing or removing someone stops their alerts', async () => {
   await callback({ event: 'unsubscribed', user_id: 'vb-maria' });
   assert.equal((await s.get('/api/v2/clients/acme/viber')).body.subscribers.length, 0);
 
-  db.prepare("INSERT INTO viber_subscribers (client_id, viber_id, name) VALUES ('acme', 'vb-nikos', 'Nikos')").run();
+  await db.prepare("INSERT INTO viber_subscribers (client_id, viber_id, name) VALUES ('acme', 'vb-nikos', 'Nikos')").run();
   assert.equal((await s.del('/api/v2/clients/acme/viber/vb-nikos')).body.ok, true);
   assert.equal((await s.get('/api/v2/clients/acme/viber')).body.subscribers.length, 0);
   const c = session(srv.base);

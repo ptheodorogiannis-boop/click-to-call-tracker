@@ -37,9 +37,9 @@ async function call(method, body) {
 const sendText = (receiver, text) => call('send_message', { receiver, type: 'text', text: text.slice(0, 7000), sender: SENDER() });
 
 // A code someone sends the bot to receive one client's alerts. Easy to type: no 0/O or 1/I.
-function linkCode(clientId) {
+async function linkCode(clientId) {
   const code = 'CT-' + Array.from(crypto.randomBytes(6), (b) => 'ACDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 31]).join('');
-  s.newLink.run(code, clientId);
+  await s.newLink.run(code, clientId);
   return { code, expires_in_hours: 24 };
 }
 
@@ -55,28 +55,28 @@ async function onCallback(ev) {
   if (ev.event === 'conversation_started') {
     return { sender: SENDER(), type: 'text', text: 'Send the code from Ruler Calls (it starts with CT-) to get missed-call alerts here.' };
   }
-  if (ev.event === 'unsubscribed' && ev.user_id) { s.unsubscribeAll.run(ev.user_id); return null; }
+  if (ev.event === 'unsubscribed' && ev.user_id) { await s.unsubscribeAll.run(ev.user_id); return null; }
   if (ev.event === 'message' && ev.sender && ev.message && ev.message.type === 'text') {
     const code = String(ev.message.text || '').trim().toUpperCase().replace(/\s+/g, '');
-    const link = /^CT-[A-Z0-9]{6}$/.test(code) ? s.link.get(code) : null;
+    const link = /^CT-[A-Z0-9]{6}$/.test(code) ? await s.link.get(code) : null;
     if (!link) {
       await sendText(ev.sender.id, 'That code did not work. Make a new one in Ruler Calls: the client, Alerts and reports, Viber.');
       return null;
     }
-    s.subscribe.run(link.client_id, ev.sender.id, (ev.sender.name || '').slice(0, 80) || null);
-    s.dropLink.run(code);
-    await sendText(ev.sender.id, `Done. Missed calls for ${s.clientName.get(link.client_id).name} will arrive here.`);
+    await s.subscribe.run(link.client_id, ev.sender.id, (ev.sender.name || '').slice(0, 80) || null);
+    await s.dropLink.run(code);
+    await sendText(ev.sender.id, `Done. Missed calls for ${(await s.clientName.get(link.client_id)).name} will arrive here.`);
   }
   return null;
 }
 
 async function alert(clientId, text) {
-  const people = s.forClient.all(clientId);
+  const people = await s.forClient.all(clientId);
   const results = await Promise.allSettled(people.map((p) => sendText(p.viber_id, text)));
   return results.filter((r) => r.status === 'fulfilled').length;
 }
 
 const subscribers = (clientId) => s.forClient.all(clientId);
-const removeSubscriber = (clientId, viberId) => s.remove.run(clientId, viberId).changes > 0;
+const removeSubscriber = async (clientId, viberId) => (await s.remove.run(clientId, viberId)).changes > 0;
 
 module.exports = { enabled, linkCode, validSignature, onCallback, alert, subscribers, removeSubscriber, call };

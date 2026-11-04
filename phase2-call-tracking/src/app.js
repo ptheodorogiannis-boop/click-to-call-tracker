@@ -1,24 +1,35 @@
 'use strict';
-// Builds the Express app. src/server.js listens; tests import this directly.
+// Builds the Express app. src/server.js listens (Docker, local); on Vercel this module is the function (zero-config
+// Express: src/app.js exporting the app). Tests import it directly.
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { migrate } = require('./db');
 const { bootstrapOwner } = require('./users');
 
-migrate(); // ensure schema exists on boot
 // What reacts to call events: outbound webhooks, missed-call alerts, AI summaries.
 require('./services/webhooks');
 require('./services/alerts');
 require('./services/ai');
 
-const owner = bootstrapOwner();
-if (owner) console.log(`created owner "${owner.login}" from ADMIN_USER / ADMIN_PASSWORD`);
+// The database is ready (schema migrated, first owner created) before any request is handled. Once per process; a
+// failed attempt is retried by the next request.
+let booted = null;
+function boot() {
+  return (booted ||= (async () => {
+    await migrate();
+    const owner = await bootstrapOwner();
+    if (owner) console.log(`created owner "${owner.login}" from ADMIN_USER / ADMIN_PASSWORD`);
+  })().catch((e) => { booted = null; throw e; }));
+}
 
 const app = express();
+app.boot = boot;
+app.use((req, res, next) => boot().then(() => next(), next));
 // Behind Caddy (its own container on the private compose network), req.ip must be the visitor's address, or every
 // sign-in shares one brake. Trust the local hops by default; TRUST_PROXY overrides (e.g. a hop count behind a CDN).
-app.set('trust proxy', process.env.TRUST_PROXY || 'loopback, uniquelocal');
+// On Vercel its edge sets X-Forwarded-For to the visitor's address, so the first hop is trusted there.
+app.set('trust proxy', process.env.TRUST_PROXY || (process.env.VERCEL ? true : 'loopback, uniquelocal'));
 
 // MCP parses its own JSON body (before the global parsers touch it).
 app.use('/mcp', require('./mcp'));
@@ -46,6 +57,14 @@ app.use(express.json());
 
 app.get('/health', (req, res) => res.json({ ok: true, ts: Date.now() }));
 
+// Scheduled reports. On Vercel a Cron Job calls this once a day (vercel.json); a server that stays up also runs the
+// same check every 15 minutes (server.js). Never open: it needs CRON_SECRET as a Bearer token.
+app.get('/api/cron/reports', (req, res, next) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.get('Authorization') !== `Bearer ${secret}`) return res.status(401).json({ error: 'unauthorized' });
+  require('./services/reports').runDue().then((sent) => res.json({ sent }), next);
+});
+
 // Serve the browser DNI snippet (so clients can <script src="https://calls.../static/dni-tracker.js">).
 app.use('/static', express.static(path.join(__dirname, '..', 'public'), { maxAge: '1h' }));
 
@@ -59,11 +78,16 @@ app.use(['/api', '/webhooks', '/mcp', '/static'], (req, res) => res.status(404).
 
 // The web app (web/dist, built by `npm run build`). Hashed assets cache for a year; every other path gets
 // index.html so client-side routes survive a reload. Auth is enforced by the API; the shell is public.
+// On Vercel the files are on its CDN (public/) and the page HTML comes bundled (src/generated/index-html.js).
 const web = path.join(__dirname, '..', 'web', 'dist');
+let bundledHtml = null;
+try { bundledHtml = require('./generated/index-html'); } catch (e) { /* not a Vercel build */ }
 if (fs.existsSync(path.join(web, 'index.html'))) {
   app.use('/assets', express.static(path.join(web, 'assets'), { immutable: true, maxAge: '1y' }));
   app.use(express.static(web, { index: false, maxAge: '1h' }));
   app.get('*', (req, res) => res.set('Cache-Control', 'no-cache').sendFile(path.join(web, 'index.html')));
+} else if (bundledHtml) {
+  app.get('*', (req, res) => res.set('Cache-Control', 'no-cache').type('html').send(bundledHtml));
 } else {
   app.get('/', (req, res) => res.type('text').send('CallTrack API is running. Build the web app with `npm run build`.'));
 }

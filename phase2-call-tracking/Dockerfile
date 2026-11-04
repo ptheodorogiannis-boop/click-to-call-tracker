@@ -1,11 +1,6 @@
-# Two stages: build the web app and the native better-sqlite3 module, then ship only what runs.
+# Two stages: build the web app, then ship only what runs. The database client (libSQL) ships prebuilt binaries.
 # bookworm-slim works on x64 and ARM64 (Oracle Cloud Always Free is ARM64/Ampere). Node 22 for the Vite config.
 FROM node:22-bookworm-slim AS build
-
-# Build deps for better-sqlite3 (used only if a prebuilt binary isn't available).
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3 make g++ ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY package.json package-lock.json ./

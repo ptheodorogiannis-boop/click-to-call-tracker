@@ -4,7 +4,9 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 
 const cfg = {
   port: parseInt(process.env.PORT || '8080', 10),
-  publicBaseUrl: (process.env.PUBLIC_BASE_URL || '').replace(/\/$/, ''),
+  // On Vercel, the project's production address unless PUBLIC_BASE_URL says otherwise (a custom domain).
+  publicBaseUrl: (process.env.PUBLIC_BASE_URL ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://' + process.env.VERCEL_PROJECT_PRODUCTION_URL : '')).replace(/\/$/, ''),
   dbPath: process.env.DB_PATH || './data/calls.db',
 
   // Account-level Twilio is now a FALLBACK only — each client carries its own creds in the DB.

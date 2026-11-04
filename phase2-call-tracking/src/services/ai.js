@@ -41,7 +41,7 @@ const s = {
 // Summarise one call. Returns the stored result, or { skipped } with the reason.
 async function summarise(callSid) {
   if (!enabled()) return { skipped: 'AI is not set up (ANTHROPIC_API_KEY)' };
-  const call = s.get.get(callSid);
+  const call = await s.get.get(callSid);
   if (!call) return { skipped: 'no such call' };
   const transcript = String(call.transcript || '').trim();
   if (transcript.length < 20) return { skipped: 'the transcript is too short to judge' };
@@ -66,7 +66,7 @@ async function summarise(callSid) {
   if (!text) return { skipped: 'no answer' };
   const out = JSON.parse(text.text);
   const score = Math.max(0, Math.min(100, Math.round(Number(out.score) || 0)));
-  s.save.run(String(out.summary).slice(0, 1200), out.label, score, callSid);
+  await s.save.run(String(out.summary).slice(0, 1200), out.label, score, callSid);
   events.emit('call.updated', callSid);
   return { summary: out.summary, label: out.label, score, reason: out.reason };
 }

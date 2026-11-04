@@ -1,4 +1,10 @@
--- Call-tracking schema (SQLite). Multi-client. One file DB on the VPS.
+-- Call-tracking schema (SQLite / libSQL). Multi-client. A local file, or a Turso database on Vercel.
+
+-- Bookkeeping: the schema version this database is at (src/db.js skips migrations when it matches).
+CREATE TABLE IF NOT EXISTS meta (
+  key    TEXT PRIMARY KEY,
+  value  TEXT
+);
 
 CREATE TABLE IF NOT EXISTS clients (
   id                    TEXT PRIMARY KEY,         -- e.g. 'client-acme'

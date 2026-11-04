@@ -1,4 +1,13 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "git": { "deploymentEnabled": false }
+  "buildCommand": "npm run vercel-build",
+  "regions": [
+    "fra1"
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/reports",
+      "schedule": "0 6 * * *"
+    }
+  ]
 }

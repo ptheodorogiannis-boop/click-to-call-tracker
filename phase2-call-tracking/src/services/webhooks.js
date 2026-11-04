@@ -34,19 +34,19 @@ async function deliver(hook, event, call) {
         signal: AbortSignal.timeout(10000)
       });
       status = `${r.status}${i ? ` after ${i + 1} tries` : ''}`;
-      if (r.ok) { s.result.run(status, 1, hook.id); return true; }
+      if (r.ok) { await s.result.run(status, 1, hook.id); return true; }
     } catch (e) {
       status = `error: ${String(e && e.message ? e.message : e).slice(0, 80)}`;
     }
   }
-  s.result.run(status, 0, hook.id);
+  await s.result.run(status, 0, hook.id);
   return false;
 }
 
 async function dispatch(callSid, event) {
   let call;
-  try { call = calls.getCall(SYSTEM, callSid); } catch (e) { return; }
-  const hooks = s.forCall.all(call.client_id).filter((h) => h.events.split(',').includes(event));
+  try { call = await calls.getCall(SYSTEM, callSid); } catch (e) { return; }
+  const hooks = (await s.forCall.all(call.client_id)).filter((h) => h.events.split(',').includes(event));
   await Promise.all(hooks.map((h) => deliver(h, event, call)));
 }
 

@@ -13,6 +13,11 @@ Each client uses **their own Twilio credentials**, isolated per account.
 - **New web app** (React + Vite + Tailwind, Ruler Hub glass design), built into `web/dist` by `npm run build` and served by the same Node process. The old `public/admin` UI and `/admin/api` are gone.
 - **Tests:** `npm test` (node:test, throwaway DB). **Demo:** `DB_PATH=./data/demo.db node tools/demo.js`, then `node tools/run-demo.js` (port 8099).
 
+## Hosting (2026-11-04)
+The database layer is libSQL: a local SQLite file by default, a Turso database when `TURSO_DATABASE_URL` is set. That
+lets the same code run on Vercel (`VERCEL.md`: Root Directory `phase2-call-tracking`, Frankfurt region, daily report
+cron) or on a VPS with Docker (`DEPLOY.md`).
+
 ## Wave 2 (2026-11-04)
 Block list, fixed source numbers, missed-call alerts (Slack, email, Viber), scheduled email reports, outbound webhooks,
 AI call summaries (Claude), health flags, password change and reset. New optional `.env` values: `SMTP_*`,

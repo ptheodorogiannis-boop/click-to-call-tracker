@@ -19,9 +19,11 @@ function keyOk(req) {
 }
 
 router.use((req, res, next) => {
-  req.user = keyOk(req) ? SYSTEM : bearerUser(req);
-  if (!req.user) return res.status(401).json({ error: 'unauthorized' });
-  next();
+  Promise.resolve(keyOk(req) ? SYSTEM : bearerUser(req)).then((user) => {
+    if (!user) return res.status(401).json({ error: 'unauthorized' });
+    req.user = user;
+    next();
+  }, next);
 });
 
 function since(req) {
@@ -29,22 +31,22 @@ function since(req) {
 }
 
 // GET /api/report/calls?client=client-acme&since=2026-06-01&limit=500
-router.get('/calls', (req, res, next) => {
+router.get('/calls', async (req, res, next) => {
   try {
     if (!req.query.client) return res.status(400).json({ error: 'client required' });
-    const r = calls.listCalls(req.user, { client_id: req.query.client, since: since(req), limit: req.query.limit || 500 });
+    const r = await calls.listCalls(req.user, { client_id: req.query.client, since: since(req), limit: req.query.limit || 500 });
     res.json({ client: req.query.client, count: r.calls.length, calls: r.calls });
   } catch (e) { next(e); }
 });
 
 // GET /api/report/stats?client=client-acme&since=2026-06-01  → per-channel totals
-router.get('/stats', (req, res, next) => {
+router.get('/stats', async (req, res, next) => {
   try {
     if (!req.query.client) return res.status(400).json({ error: 'client required' });
-    calls.scopedClient(req.user, req.query.client);
+    await calls.scopedClient(req.user, req.query.client);
     const f = { client_id: req.query.client, since: since(req) };
-    const by = calls.byChannel(req.user, f).map((r) => ({ channel: r.channel, total: r.calls, answered: r.answered, missed: r.missed, qualified: r.leads }));
-    const t = calls.totals(req.user, f);
+    const by = (await calls.byChannel(req.user, f)).map((r) => ({ channel: r.channel, total: r.calls, answered: r.answered, missed: r.missed, qualified: r.leads }));
+    const t = await calls.totals(req.user, f);
     res.json({
       client: req.query.client,
       totals: { total: t.calls, answered: t.answered, missed: t.missed, qualified: t.leads, first_time: t.first_time },

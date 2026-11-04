@@ -8,6 +8,7 @@ const sendDue = () => reports.runDue().then((r) => r.length && console.log('[rep
 setTimeout(sendDue, 30000).unref();
 setInterval(sendDue, 15 * 60000).unref();
 
+app.boot().catch((e) => { console.error('[boot]', e); process.exit(1); });
 app.listen(cfg.port, () => {
   console.log(`ctc-call-tracking listening on :${cfg.port}`);
   if (!cfg.publicBaseUrl) console.warn('⚠ PUBLIC_BASE_URL is empty — Twilio signature validation and callback URLs will break.');

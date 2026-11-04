@@ -16,12 +16,14 @@
     "test": "node --test --require ./test/setup.js \"test/*.test.js\"",
     "build": "vite build --config web/vite.config.mts",
     "dev:web": "vite --config web/vite.config.mts",
-    "typecheck": "tsc -p web"
+    "typecheck": "tsc -p web",
+    "vercel-build": "vite build --config web/vite.config.mts && node tools/vercel-prepare.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0",
+    "@libsql/client": "^0.18.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "better-sqlite3": "^12.11.1",
+    "@vercel/functions": "^3.10.6",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "google-ads-api": "^17.1.0",

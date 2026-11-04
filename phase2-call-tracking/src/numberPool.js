@@ -12,11 +12,11 @@ const { uuid, deriveChannel } = require('./services/attribution');
  * `fallback:true` means the pool was exhausted and we reused the least-recently
  * assigned number — attribution still recorded, but two visitors could share it.
  */
-function assignNumber(clientId, attribution, meta = {}) {
-  const pool = q.poolNumbers.all(clientId);
+async function assignNumber(clientId, attribution, meta = {}) {
+  const pool = await q.poolNumbers.all(clientId);
   if (!pool.length) return null;
 
-  let phone = (q.freeNumbers.get(clientId) || {}).phone || null;
+  let phone = ((await q.freeNumbers.get(clientId)) || {}).phone || null;
   let fallback = false;
   if (!phone) {
     // Pool exhausted: reuse the number whose last reservation is oldest.
@@ -29,7 +29,7 @@ function assignNumber(clientId, attribution, meta = {}) {
   const sessionId = uuid();
   const a = attribution || {};
 
-  q.insertSession.run({
+  await q.insertSession.run({
     id: sessionId,
     client_id: clientId,
     phone,
