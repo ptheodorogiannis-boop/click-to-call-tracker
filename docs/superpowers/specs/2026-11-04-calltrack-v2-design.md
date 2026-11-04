@@ -121,4 +121,32 @@ separately as "Mobile (no region)". Region comes from the landline area code and
 3. MCP + tests
 4. web/ scaffold, tokens, frame, theme; Overview; Calls + drawer; Clients + editor; Reports; Settings; portal
 5. Greece map data, demo seed with realistic calls, browser QA, remove old admin, docs
-6. Wave 2: research features
+6. Wave 2: research features (below)
+
+## Wave 2: features from the competitor research
+
+Source: `docs/research/2026-11-04-competitor-features.md` (top 15, ranked). Wave 1 already covers client logins and
+roles (#3), tags, notes, lead status and value (#4, without pushing the value to ad platforms), CSV export (part of
+#7) and the MCP server (#11).
+
+**Can be built and verified on this machine** (no outside accounts):
+
+| Feature | Research rank | Shape |
+|---|---|---|
+| Spam filter and block list | #6, must, S | per-client blocked numbers and prefixes; blocked calls are rejected before forwarding, logged as spam, never uploaded as conversions |
+| Fixed source numbers | #5, must, S | a number can be "fixed" with a source label (Google Business Profile, print, radio); calls to it take that channel instead of falling to direct |
+| Outbound webhooks | #10, should, S | per-client URL + signing secret; `call.completed` / `call.updated` events, HMAC-signed, retried; tested against a local receiver |
+| Health flags | #8, should, S | in-app flags for a pool that ran out (fallback assignments), conversion upload failures, a client with no calls for N days |
+| Password change and reset | gap found in review | change your own password; owner resets anyone's |
+
+**Needs the user's accounts or a decision first:**
+
+| Feature | Research rank | What is needed |
+|---|---|---|
+| Missed-call and daily alerts | #1, must, S | which channel: email (SMTP), Slack, Viber or SMS |
+| AI call summary and lead score in Greek | #2, must, M | `ANTHROPIC_API_KEY`; built against a mock (`ANTHROPIC_BASE_URL`) like Ruler Reports |
+| Scheduled client reports by email | #7, must, M | SMTP account, report template |
+| Value restatement to ad platforms | #4 | check each platform's API for adjusting or retracting an uploaded conversion |
+| Keyword from gclid | #9, should, M | Google Ads API access per client |
+| Call flows (hours, voicemail, whisper), text back | #13, #15 | live Twilio numbers to test against |
+| GDPR retention and per-caller export/delete | #14, should, M | retention periods agreed with clients |
